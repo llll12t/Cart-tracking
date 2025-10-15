@@ -1,47 +1,84 @@
-// src/components/admin/AddVehicleForm.js
 "use client";
 
 import { useState } from "react";
-import { db } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
 import { collection, addDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export default function AddVehicleForm({ onClose }) {
   const [formData, setFormData] = useState({
     licensePlate: '',
     brand: '',
     model: '',
-    type: 'รถเก๋ง', // Default value
-    status: 'available', // Default value
+    type: 'รถเก๋ง',
+    status: 'available',
     currentMileage: 0,
+    taxDueDate: '',
+    insuranceExpireDate: '',
+    imageUrl: '',
   });
+  const [imageFile, setImageFile] = useState(null);
   const [message, setMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleFileChange = (e) => {
+    if (e.target.files[0]) {
+      setImageFile(e.target.files[0]);
+    } else {
+      setImageFile(null);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
+    setIsLoading(true);
 
     if (!formData.licensePlate || !formData.brand || !formData.model) {
         setMessage('กรุณากรอก ทะเบียน, ยี่ห้อ, และรุ่น');
+        setIsLoading(false);
         return;
     }
 
+    let finalImageUrl = formData.imageUrl;
+
     try {
+        if (imageFile) {
+            setMessage('กำลังอัปโหลดรูปภาพ...');
+            const storageRef = ref(storage, `vehicle_images/${imageFile.name}_${Date.now()}`);
+            const snapshot = await uploadBytes(storageRef, imageFile);
+            finalImageUrl = await getDownloadURL(snapshot.ref);
+            setMessage('อัปโหลดรูปภาพสำเร็จ...');
+        } else if (formData.imageUrl && !imageFile) {
+            finalImageUrl = formData.imageUrl;
+        } else {
+            finalImageUrl = '';
+        }
+
+        setMessage('กำลังบันทึกข้อมูลรถ...');
         await addDoc(collection(db, "vehicles"), {
             ...formData,
-            currentMileage: Number(formData.currentMileage) // แปลงเป็นตัวเลข
+            currentMileage: Number(formData.currentMileage),
+            taxDueDate: formData.taxDueDate ? new Date(formData.taxDueDate) : null,
+            insuranceExpireDate: formData.insuranceExpireDate ? new Date(formData.insuranceExpireDate) : null,
+            imageUrl: finalImageUrl,
         });
+
         setMessage('เพิ่มรถสำเร็จ!');
         setTimeout(() => {
-            onClose(); // ปิดฟอร์มหลังเพิ่มสำเร็จ
+            onClose();
         }, 1500);
+
     } catch (error) {
         console.error("Error adding vehicle: ", error);
-        setMessage('เกิดข้อผิดพลาดในการเพิ่มรถ');
+        setMessage('เกิดข้อผิดพลาดในการเพิ่มรถ: ' + error.message);
+    } finally {
+        setIsLoading(false);
     }
   };
 
@@ -54,6 +91,37 @@ export default function AddVehicleForm({ onClose }) {
           <input type="text" name="brand" placeholder="ยี่ห้อ (เช่น Toyota)" onChange={handleChange} required className="w-full p-2 border rounded"/>
           <input type="text" name="model" placeholder="รุ่น (เช่น Hilux)" onChange={handleChange} required className="w-full p-2 border rounded"/>
           <input type="number" name="currentMileage" placeholder="เลขไมล์ปัจจุบัน" onChange={handleChange} required className="w-full p-2 border rounded"/>
+          
+          <div>
+            <label className="block mb-1 text-sm">วันสิ้นสุดภาษี</label>
+            <input type="date" name="taxDueDate" onChange={handleChange} className="w-full p-2 border rounded"/>
+          </div>
+          <div>
+            <label className="block mb-1 text-sm">วันหมดอายุประกัน</label>
+            <input type="date" name="insuranceExpireDate" onChange={handleChange} className="w-full p-2 border rounded"/>
+          </div>
+
+          <div>
+            <label className="block mb-1 text-sm">รูปภาพรถ</label>
+            <input 
+                type="file" 
+                onChange={handleFileChange} 
+                accept="image/*" 
+                className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+            />
+            <p className="text-xs text-gray-500 mt-1">หรือกรอก URL รูปภาพโดยตรง:</p>
+            <input 
+                type="text" 
+                name="imageUrl" 
+                value={formData.imageUrl}
+                onChange={handleChange} 
+                placeholder="https://example.com/car-image.jpg" 
+                className="w-full p-2 border rounded mt-1"
+                disabled={!!imageFile}
+            />
+            {imageFile && <p className="text-sm text-green-600 mt-1">ไฟล์ที่เลือก: {imageFile.name}</p>}
+          </div>
+
           <div>
             <label className="block mb-1 text-sm">ประเภทรถ</label>
             <select name="type" onChange={handleChange} value={formData.type} className="w-full p-2 border rounded">
@@ -70,11 +138,13 @@ export default function AddVehicleForm({ onClose }) {
             </select>
           </div>
           
-          {message && <p className="text-center">{message}</p>}
+          {message && <p className="text-center text-sm">{message}</p>}
 
           <div className="flex justify-end gap-4 pt-4">
-            <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
-            <button type="submit" className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700">บันทึก</button>
+            <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50">ยกเลิก</button>
+            <button type="submit" disabled={isLoading} className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700 disabled:bg-gray-400">
+                {isLoading ? 'กำลังบันทึก...' : 'บันทึก'}
+            </button>
           </div>
         </form>
       </div>

@@ -6,13 +6,13 @@ import { db } from "@/lib/firebase";
 import AddVehicleForm from "@/components/admin/AddVehicleForm";
 import Link from "next/link";
 
-// Component for the vehicle list table
 function VehicleList({ vehicles }) {
   const getStatusClass = (status) => {
     switch (status) {
       case "available":
         return "bg-green-100 text-green-800";
       case "in_use":
+      case "on_trip":
         return "bg-yellow-100 text-yellow-800";
       case "maintenance":
         return "bg-red-100 text-red-800";
@@ -26,6 +26,7 @@ function VehicleList({ vehicles }) {
       <table className="w-full text-sm text-left text-gray-500">
         <thead className="text-xs text-gray-700 uppercase bg-gray-50">
           <tr>
+            <th scope="col" className="px-6 py-3">รูปภาพ</th>
             <th scope="col" className="px-6 py-3">ทะเบียน</th>
             <th scope="col" className="px-6 py-3">ยี่ห้อ / รุ่น</th>
             <th scope="col" className="px-6 py-3">ประเภท</th>
@@ -33,10 +34,16 @@ function VehicleList({ vehicles }) {
             <th scope="col" className="px-6 py-3">Action</th>
           </tr>
         </thead>
-        {/* Make sure there are no comments or whitespace here */}
         <tbody>
           {vehicles.map((vehicle) => (
             <tr key={vehicle.id} className="bg-white border-b hover:bg-gray-50">
+              <td className="px-6 py-4">
+                {vehicle.imageUrl ? (
+                  <img src={vehicle.imageUrl} alt={`${vehicle.brand} ${vehicle.model}`} className="w-16 h-10 object-cover rounded-md" />
+                ) : (
+                  <div className="w-16 h-10 bg-gray-200 flex items-center justify-center text-xs text-gray-500 rounded-md">ไม่มีรูป</div>
+                )}
+              </td>
               <td className="px-6 py-4 font-medium text-gray-900">{vehicle.licensePlate}</td>
               <td className="px-6 py-4">{vehicle.brand} {vehicle.model}</td>
               <td className="px-6 py-4">{vehicle.type}</td>
@@ -46,12 +53,20 @@ function VehicleList({ vehicles }) {
                 </span>
               </td>
               <td className="px-6 py-4">
-                <Link
-                  href={`/vehicles/${vehicle.id}/maintenance`}
-                  className="font-medium text-indigo-600 hover:underline"
-                >
-                  ดูประวัติซ่อม
-                </Link>
+                <div className="flex flex-col space-y-2">
+                  <Link
+                    href={`/vehicles/${vehicle.id}/maintenance`}
+                    className="font-medium text-indigo-600 hover:underline"
+                  >
+                    ดูประวัติซ่อม
+                  </Link>
+                  <Link
+                    href={`/vehicles/${vehicle.id}/fuel`}
+                    className="font-medium text-green-600 hover:underline"
+                  >
+                    ประวัติน้ำมัน
+                  </Link>
+                </div>
               </td>
             </tr>
           ))}
@@ -61,7 +76,6 @@ function VehicleList({ vehicles }) {
   );
 }
 
-// Main Page Component
 export default function VehiclesPage() {
   const [showForm, setShowForm] = useState(false);
   const [vehicles, setVehicles] = useState([]);
