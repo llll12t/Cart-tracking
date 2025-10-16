@@ -181,7 +181,7 @@ export default function BookingForm() {
           disabled={isLoading}
           className="w-full py-3 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700 transition-all disabled:bg-gray-400"
         >
-          {isLoading ? 'กำลังส่ง...' : '+ เพิ่มค่าใช้จ่าย'}
+          {isLoading ? 'กำลังส่ง...' : 'ยืนยันจองรถ'}
         </button>
       </form>
     </div>

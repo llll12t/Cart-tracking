@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, onSnapshot, orderBy, query, doc, deleteDoc } from 'firebase/firestore';
 import Link from 'next/link';
 
 // Component UserCard (เหมือนเดิม)
-function UserCard({ user }) {
+function UserCard({ user, onDelete }) {
   const getRoleStyle = (role) => {
     switch (role) {
       case 'admin':
@@ -19,7 +19,21 @@ function UserCard({ user }) {
   };
 
   return (
-    <div className={`p-4 bg-white rounded-lg shadow-md border-l-4 ${getRoleStyle(user.role)}`}>
+    <div className={`p-4 bg-white rounded-lg shadow-md border-l-4 relative ${getRoleStyle(user.role)}`}>
+      <div className="absolute top-2 right-2 flex gap-2">
+        <Link
+          href={`/users/${user.id}/edit`}
+          className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200"
+        >
+          แก้ไข
+        </Link>
+        <button
+          onClick={() => onDelete(user.id)}
+          className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+        >
+          ลบ
+        </button>
+      </div>
       <div className="flex justify-between items-center">
         <div>
           <p className="font-bold text-lg text-gray-900">{user.name}</p>
@@ -29,7 +43,6 @@ function UserCard({ user }) {
           {user.role}
         </span>
       </div>
-       {/* ในอนาคต: เพิ่มปุ่ม Edit ที่นี่ โดยลิงก์ไปที่ /users/${user.id}/edit */}
     </div>
   );
 }
@@ -38,6 +51,7 @@ function UserCard({ user }) {
 export default function ManageUsersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     const q = query(collection(db, "users"), orderBy("name", "asc"));
@@ -52,6 +66,17 @@ export default function ManageUsersPage() {
     return () => unsubscribe();
   }, []);
 
+  const handleDelete = async (userId) => {
+    if (!window.confirm("คุณต้องการลบผู้ใช้นี้จริงหรือไม่?")) return;
+    setDeletingId(userId);
+    try {
+      await deleteDoc(doc(db, "users", userId));
+    } catch (err) {
+      alert("เกิดข้อผิดพลาดในการลบผู้ใช้");
+    }
+    setDeletingId(null);
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-8">
@@ -65,16 +90,15 @@ export default function ManageUsersPage() {
           + เพิ่มผู้ใช้ใหม่
         </Link>
       </div>
-      
       {loading && <p>กำลังโหลดข้อมูลผู้ใช้...</p>}
-
       {!loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {users.map((user) => (
-            <UserCard key={user.id} user={user} />
+            <UserCard key={user.id} user={user} onDelete={handleDelete} />
           ))}
         </div>
       )}
+      {deletingId && <p className="text-red-500 mt-4">กำลังลบผู้ใช้...</p>}
     </div>
   );
 }

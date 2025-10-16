@@ -18,7 +18,7 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       // หาก Login สำเร็จ ให้ redirect ไปหน้า dashboard
-      router.push('/dashboard'); 
+      router.push('/dashboards'); 
     } catch (err) {
       setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
       console.error(err);

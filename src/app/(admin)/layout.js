@@ -12,7 +12,7 @@ function AdminSidebar() {
         <ul>
           <li className="mb-4">
             <Link
-              href="/dashboards"
+              href="/dashboard"
               className="block p-2 rounded hover:bg-gray-700"
             >
               ภาพรวม (Dashboard)
@@ -32,6 +32,14 @@ function AdminSidebar() {
               className="block p-2 rounded hover:bg-gray-700"
             >
               จัดการรถ (Vehicles)
+            </Link>
+          </li>
+          <li className="mb-4">
+            <Link
+              href="/vehicles-analysis"
+              className="block p-2 rounded hover:bg-gray-700"
+            >
+              วิเคราะห์การใช้งานรถ
             </Link>
           </li>
           <li className="mb-4">
