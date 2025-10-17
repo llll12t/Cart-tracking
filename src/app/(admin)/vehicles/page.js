@@ -112,20 +112,12 @@ export default function VehiclesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">จัดการรถในระบบ</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowForm(true)}
-            className="px-4 py-2 font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-          >
-            + เพิ่มรถใหม่
-          </button>
-          <Link
-            href="/admin/vehicles-analysis"
-            className="px-4 py-2 font-bold text-white bg-teal-600 rounded-lg hover:bg-teal-700"
-          >
-            วิเคราะห์รถ
-          </Link>
-        </div>
+        <button
+          onClick={() => setShowForm(true)}
+          className="px-4 py-2 font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+        >
+          + เพิ่มรถใหม่
+        </button>
       </div>
 
       {showForm && (

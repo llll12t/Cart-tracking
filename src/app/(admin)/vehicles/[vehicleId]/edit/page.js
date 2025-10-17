@@ -96,62 +96,87 @@ export default function EditVehiclePage() {
   if (loading) return <div className="p-8 text-center">กำลังโหลดข้อมูลรถ...</div>;
 
   return (
-    <div className="max-w-3xl mx-auto p-8">
-      <h1 className="text-2xl font-bold mb-8">แก้ไขข้อมูลรถ</h1>
+    <div className="max-w-6xl mx-auto p-8">
+      <h1 className="text-3xl font-bold mb-6">แก้ไขข้อมูลรถ</h1>
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="space-y-6">
-            <div>
-              <label className="block mb-1 text-sm font-medium">ยี่ห้อ</label>
-              <input name="brand" value={form.brand} onChange={handleChange} className="w-full p-2 border rounded" required />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* main form (span 2) */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block mb-1 text-sm font-medium">ยี่ห้อ</label>
+                <input name="brand" value={form.brand} onChange={handleChange} className="w-full p-3 border rounded-md" required />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">รุ่น</label>
+                <input name="model" value={form.model} onChange={handleChange} className="w-full p-3 border rounded-md" required />
+              </div>
             </div>
-            <div>
-              <label className="block mb-1 text-sm font-medium">รุ่น</label>
-              <input name="model" value={form.model} onChange={handleChange} className="w-full p-2 border rounded" required />
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block mb-1 text-sm font-medium">ทะเบียน</label>
+                <input name="licensePlate" value={form.licensePlate} onChange={handleChange} className="w-full p-3 border rounded-md" required />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">ปีที่ผลิต</label>
+                <input name="year" type="number" value={form.year} onChange={handleChange} className="w-full p-3 border rounded-md" />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">ประเภท</label>
+                <input name="type" value={form.type} onChange={handleChange} className="w-full p-3 border rounded-md" />
+              </div>
             </div>
-            <div>
-              <label className="block mb-1 text-sm font-medium">ทะเบียน</label>
-              <input name="licensePlate" value={form.licensePlate} onChange={handleChange} className="w-full p-2 border rounded" required />
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block mb-1 text-sm font-medium">สี</label>
+                <input name="color" value={form.color} onChange={handleChange} className="w-full p-3 border rounded-md" />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">เลขไมล์ปัจจุบัน</label>
+                <input name="currentMileage" type="number" value={form.currentMileage} onChange={handleChange} className="w-full p-3 border rounded-md" required />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">อัตราค่าเสื่อม (บาท/กม.)</label>
+                <input name="depreciationRate" type="number" step="0.01" value={form.depreciationRate} onChange={handleChange} className="w-full p-3 border rounded-md" />
+              </div>
             </div>
-            <div>
-              <label className="block mb-1 text-sm font-medium">ปีที่ผลิต</label>
-              <input name="year" type="number" value={form.year} onChange={handleChange} className="w-full p-2 border rounded" />
-            </div>
-            <div>
-              <label className="block mb-1 text-sm font-medium">ประเภท</label>
-              <input name="type" value={form.type} onChange={handleChange} className="w-full p-2 border rounded" />
-            </div>
-            <div>
-              <label className="block mb-1 text-sm font-medium">สี</label>
-              <input name="color" value={form.color} onChange={handleChange} className="w-full p-2 border rounded" />
-            </div>
-            <div>
-              <label className="block mb-1 text-sm font-medium">เลขไมล์ปัจจุบัน</label>
-              <input name="currentMileage" type="number" value={form.currentMileage} onChange={handleChange} className="w-full p-2 border rounded" required />
-            </div>
-            <div>
-              <label className="block mb-1 text-sm font-medium">อัตราค่าเสื่อม (บาท/กม.)</label>
-              <input name="depreciationRate" type="number" step="0.01" value={form.depreciationRate} onChange={handleChange} className="w-full p-2 border rounded" />
-            </div>
+
             <div>
               <label className="block mb-1 text-sm font-medium">หมายเหตุ</label>
-              <textarea name="note" value={form.note} onChange={handleChange} className="w-full p-2 border rounded" rows={2} />
+              <textarea name="note" value={form.note} onChange={handleChange} className="w-full p-3 border rounded-md" rows={4} />
             </div>
           </div>
-          <div className="flex flex-col items-center gap-4">
-            <label className="block mb-1 text-sm font-medium">รูปรถ</label>
-            {form.imageUrl ? (
-              <img src={form.imageUrl} alt="Vehicle" className="w-full max-w-xs h-40 object-cover rounded border" />
-            ) : (
-              <div className="w-full max-w-xs h-40 bg-gray-100 flex items-center justify-center rounded border text-gray-400">ไม่มีรูป</div>
-            )}
-            <input type="file" accept="image/*" onChange={handleImageChange} className="w-full" />
-          </div>
-        </div>
-        {message && <p className="text-center text-sm text-teal-700 mt-6">{message}</p>}
-        <div className="flex gap-4 justify-end mt-8">
-          <button type="button" onClick={() => router.back()} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
-          <button type="submit" className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700">บันทึก</button>
+
+          {/* right column - preview & actions */}
+          <aside className="flex flex-col items-center gap-4">
+            <div className="w-full">
+              <label className="block mb-2 text-sm font-medium">รูปรถ</label>
+              <div className="w-full bg-gray-50 rounded-lg border p-3 flex items-center justify-center">
+                {form.imageUrl ? (
+                  <img src={form.imageUrl} alt="Vehicle" className="w-full h-44 object-cover rounded" />
+                ) : (
+                  <div className="w-full h-44 bg-gray-100 flex items-center justify-center rounded text-gray-400">ไม่มีรูป</div>
+                )}
+              </div>
+              <input type="file" accept="image/*" onChange={handleImageChange} className="mt-3 w-full" />
+            </div>
+
+            <div className="w-full bg-gray-50 p-3 rounded border text-sm">
+              <div className="font-semibold">ข้อมูลสรุป</div>
+              <div className="text-xs text-gray-600 mt-2">{form.brand} {form.model}</div>
+              <div className="text-xs text-gray-600">ทะเบียน: {form.licensePlate}</div>
+              <div className="text-xs text-gray-600">ไมล์: {form.currentMileage}</div>
+              <div className="text-xs text-gray-600">สถานะ: {vehicle?.status || '-'}</div>
+            </div>
+
+            <div className="w-full flex gap-3">
+              <button type="button" onClick={() => router.back()} className="flex-1 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
+              <button type="submit" className="flex-1 px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700">บันทึก</button>
+            </div>
+            {message && <p className="text-center text-sm text-teal-700 mt-2">{message}</p>}
+          </aside>
         </div>
       </form>
     </div>

@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase'; // 1. Import db เข้ามา
 import { doc, getDoc } from 'firebase/firestore'; // 2. Import ฟังก์ชัน firestore
 
@@ -36,9 +36,19 @@ export const AuthProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
+  const logout = async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+      setUserProfile(null);
+    } catch (err) {
+      console.error('Logout error', err);
+    }
+  };
+
   return (
-    // 6. ส่ง userProfile ไปใน value ด้วย
-    <AuthContext.Provider value={{ user, userProfile, loading }}>
+    // 6. ส่ง userProfile และ logout ไปใน value ด้วย
+    <AuthContext.Provider value={{ user, userProfile, loading, logout }}>
       {children}
     </AuthContext.Provider>
   );

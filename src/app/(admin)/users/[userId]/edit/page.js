@@ -5,6 +5,8 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { auth } from '@/lib/firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
 
 export default function EditUserPage() {
 	const router = useRouter();
@@ -76,9 +78,23 @@ export default function EditUserPage() {
 				imageUrl: imageUrl
 			});
 			setMessage("บันทึกข้อมูลผู้ใช้สำเร็จ!");
-			setTimeout(() => router.push("/admin/users"), 1200);
+			setTimeout(() => router.push("/users"), 1200);
 		} catch (err) {
 			setMessage("เกิดข้อผิดพลาดในการบันทึก");
+		}
+	};
+
+	const handleSendReset = async () => {
+		if (!form.email) {
+			alert('ไม่มีอีเมลของผู้ใช้');
+			return;
+		}
+		try {
+			await sendPasswordResetEmail(auth, form.email);
+			alert('ส่งอีเมลรีเซ็ตรหัสผ่านเรียบร้อยแล้ว');
+		} catch (err) {
+			console.error(err);
+			alert('ไม่สามารถส่งอีเมลรีเซ็ตรหัสผ่านได้');
 		}
 	};
 
@@ -126,6 +142,7 @@ export default function EditUserPage() {
 				</div>
 				{message && <p className="text-center text-sm text-teal-700">{message}</p>}
 				<div className="flex gap-4 justify-end">
+					<button type="button" onClick={handleSendReset} className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">ส่งอีเมลรีเซ็ตรหัสผ่าน</button>
 					<button type="button" onClick={() => router.back()} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
 					<button type="submit" className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700">บันทึก</button>
 				</div>

@@ -1,7 +1,7 @@
 // src/components/booking/BookingForm.js
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp, query, where, onSnapshot } from "firebase/firestore";
@@ -10,6 +10,8 @@ export default function BookingForm() {
   const { user } = useAuth();
   const [vehicles, setVehicles] = useState([]);
   const [selectedVehicle, setSelectedVehicle] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [mileage, setMileage] = useState("");
@@ -27,6 +29,16 @@ export default function BookingForm() {
       setVehicles(vehiclesData);
     });
     return unsubscribe;
+  }, []);
+
+  // close dropdown on outside click (container wraps button + list)
+  useEffect(() => {
+    function onDocClick(e) {
+      if (!containerRef.current) return;
+      if (!containerRef.current.contains(e.target)) setIsOpen(false);
+    }
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
   }, []);
 
   const handleSubmit = async (e) => {
@@ -80,22 +92,71 @@ export default function BookingForm() {
   return (
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
       <form onSubmit={handleSubmit} className="p-6 space-y-4">
-        {/* เลือกรถ */}
+        {/* เลือกรถ - custom dropdown with images */}
         <div>
           <label className="block text-sm font-medium text-teal-700 mb-1">เลือกรถ</label>
-          <select 
-            value={selectedVehicle} 
-            onChange={(e) => setSelectedVehicle(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-700"
-            required
-          >
-            <option value="">-- เลือกรถ --</option>
-            {vehicles.map(vehicle => (
-              <option key={vehicle.id} value={vehicle.id}>
-                {vehicle.brand} {vehicle.model} - {vehicle.licensePlate}
-              </option>
-            ))}
-          </select>
+          <div className="relative" ref={containerRef}>
+            <button
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={isOpen}
+              onClick={() => setIsOpen(o => !o)}
+              className="w-full flex items-center justify-between gap-3 px-4 py-3 border border-gray-300 rounded-lg bg-white text-left"
+            >
+              <div className="flex items-center gap-3">
+                {selectedVehicle ? (
+                  (() => {
+                    const sel = vehicles.find(v => v.id === selectedVehicle);
+                    if (!sel) return <span className="text-gray-500">-- เลือกรถ --</span>;
+                    return (
+                      <>
+                        {sel.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={sel.imageUrl} alt={`${sel.brand} ${sel.model}`} className="w-10 h-8 object-cover rounded-md border" />
+                        ) : (
+                          <div className="w-10 h-8 bg-gray-200 rounded-md flex items-center justify-center text-xs text-gray-500 border">ไม่มีรูป</div>
+                        )}
+                        <div className="text-sm">
+                          <div className="font-medium">{sel.brand} {sel.model}</div>
+                          <div className="text-xs text-gray-600">{sel.licensePlate}</div>
+                        </div>
+                      </>
+                    );
+                  })()
+                ) : (
+                  <span className="text-gray-500">-- เลือกรถ --</span>
+                )}
+              </div>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 011.08 1.04l-4.25 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+              </svg>
+            </button>
+
+            {/* dropdown list */}
+            <div className={`absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded shadow-lg max-h-64 overflow-auto ${isOpen ? '' : 'hidden'}`} role="listbox">
+              {vehicles.length === 0 ? (
+                <div className="p-3 text-sm text-gray-500">ไม่มีรถว่าง</div>
+              ) : vehicles.map(v => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => { setSelectedVehicle(v.id); setIsOpen(false); }}
+                  className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50"
+                >
+                  {v.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={v.imageUrl} alt={`${v.brand} ${v.model}`} className="w-12 h-8 object-cover rounded-md border" />
+                  ) : (
+                    <div className="w-12 h-8 bg-gray-100 rounded-md flex items-center justify-center text-xs text-gray-500 border">ไม่มีรูป</div>
+                  )}
+                  <div className="flex-1 text-sm">
+                    <div className="font-medium">{v.brand} {v.model}</div>
+                    <div className="text-xs text-gray-600">{v.licensePlate}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* จุดเริ่ม และ จุดหมาย */}

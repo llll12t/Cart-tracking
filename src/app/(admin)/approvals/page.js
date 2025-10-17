@@ -44,7 +44,7 @@ export default function ApprovalsPage() {
       )}
 
       {!loading && pendingBookings.length > 0 && (
-        <div className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {pendingBookings.map((booking) => (
             <ApprovalCard key={booking.id} booking={booking} />
           ))}

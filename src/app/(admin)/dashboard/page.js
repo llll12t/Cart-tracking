@@ -92,8 +92,8 @@ export default function AdminDashboardPage() {
             {/* ส่วนแสดงข้อมูลสรุป */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard title="รถว่าง" value={stats.available} icon="✅" link="/vehicles" />
-                <StatCard title="กำลังใช้งาน" value={stats.inUse} icon="🚗" link="/vehicles" />
-                <StatCard title="ซ่อมบำรุง" value={stats.maintenance} icon="🔧" link="/vehicles" />
+                    <StatCard title="กำลังใช้งาน" value={stats.inUse} icon="🚗" link="/vehicles/in-use" />
+                    <StatCard title="ซ่อมบำรุง" value={stats.maintenance} icon="🔧" link="/vehicles" />
                 <StatCard title="คำขอรออนุมัติ" value={stats.pending} icon="🔔" link="/approvals" />
             </div>
 
