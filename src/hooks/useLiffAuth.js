@@ -7,6 +7,8 @@ import useLiff from './useLiff';
 export default function useLiffAuth() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [needsLink, setNeedsLink] = useState(false);
+  const [linkProfile, setLinkProfile] = useState(null);
   const { liff, profile, loading: liffLoading, error: liffError } = useLiff(process.env.NEXT_PUBLIC_LIFF_ID);
 
   useEffect(() => {
@@ -45,6 +47,13 @@ export default function useLiffAuth() {
           throw new Error(`auth exchange failed: ${resp.status} ${errBody}`);
         }
         const body = await resp.json();
+        if (body.needsLink) {
+          // server reports there's no matching app user — surface profile
+          setNeedsLink(true);
+          setLinkProfile(body.profile || null);
+          setLoading(false);
+          return;
+        }
         const { customToken } = body;
         const auth = getAuth();
         await signInWithCustomToken(auth, customToken);
@@ -61,5 +70,35 @@ export default function useLiffAuth() {
     return () => { mounted = false; };
   }, [liff, liffLoading, liffError]);
 
-  return { loading, error };
+  // helper: link by phone -> POST /api/auth/line/link
+  const linkByPhone = async (phone) => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (!linkProfile?.lineId) throw new Error('no_profile');
+      const resp = await fetch('/api/auth/line/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lineId: linkProfile.lineId, phone }),
+      });
+      const body = await resp.json();
+      if (!resp.ok) {
+        throw new Error(body?.error || 'link_failed');
+      }
+      const { customToken } = body;
+      const auth = getAuth();
+      await signInWithCustomToken(auth, customToken);
+      setNeedsLink(false);
+      setLinkProfile(null);
+      setLoading(false);
+      return { success: true };
+    } catch (err) {
+      console.error('linkByPhone error', err);
+      setError(err?.message || 'link-error');
+      setLoading(false);
+      return { success: false, error: err?.message };
+    }
+  };
+
+  return { loading, error, needsLink, linkProfile, linkByPhone };
 }

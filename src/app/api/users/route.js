@@ -26,7 +26,17 @@ export async function POST(request) {
   }
 
   try {
-  const { email, password, name, role, lineId } = await request.json();
+  const { email, password, name, role, lineId, phone } = await request.json();
+
+  // normalize phone if provided
+  let normalizedPhone = null;
+  if (phone) {
+    const digits = String(phone).replace(/\D/g, '');
+    if (digits.length !== 10) {
+      return NextResponse.json({ error: 'Phone must be 10 digits' }, { status: 400 });
+    }
+    normalizedPhone = digits;
+  }
 
   if (!email || !password || !name || !role) {
         return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
@@ -49,7 +59,8 @@ export async function POST(request) {
       role: role,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
-    if (lineId) userDoc.lineId = lineId;
+  if (lineId) userDoc.lineId = lineId;
+  if (normalizedPhone) userDoc.phone = normalizedPhone;
 
     await admin.firestore().collection('users').doc(userRecord.uid).set(userDoc);
 

@@ -53,25 +53,26 @@ export async function POST(req) {
       pictureUrl = profile.pictureUrl;
     }
 
-    const uid = `line:${userId}`;
-    // create firebase custom token
-    const customToken = await admin.auth().createCustomToken(uid, { provider: 'line', lineId: userId });
+    const db = admin.firestore();
 
-    // upsert user doc in Firestore for convenience
+    // try to find an existing app user that already has this lineId
     try {
-      const db = admin.firestore();
-      const userRef = db.collection('users').doc(uid);
-      await userRef.set({
-        lineId: userId,
-        displayName: displayName || null,
-        photoURL: pictureUrl || null,
-        provider: 'line',
-      }, { merge: true });
+      const usersRef = db.collection('users');
+      const qSnap = await usersRef.where('lineId', '==', userId).limit(1).get();
+      if (!qSnap.empty) {
+        const matched = qSnap.docs[0];
+        const matchedUid = matched.id;
+        const customToken = await admin.auth().createCustomToken(matchedUid, { provider: 'line', lineId: userId });
+        return new Response(JSON.stringify({ customToken, linked: true, uid: matchedUid }), { status: 200 });
+      }
     } catch (e) {
-      console.error('Failed to upsert user doc', e);
+      console.error('Error querying users by lineId', e);
+      // continue to return needsLink below
     }
 
-    return new Response(JSON.stringify({ customToken }), { status: 200 });
+    // no matching app user found — do NOT create a new user automatically.
+    // Return a response indicating linking is required and include minimal profile info
+    return new Response(JSON.stringify({ needsLink: true, profile: { lineId: userId, displayName, pictureUrl } }), { status: 200 });
   } catch (err) {
     console.error('API /api/auth/line error', err);
     return new Response(JSON.stringify({ error: 'server_error' }), { status: 500 });

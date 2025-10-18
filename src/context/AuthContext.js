@@ -5,7 +5,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase'; // 1. Import db เข้ามา
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'; // 2. Import ฟังก์ชัน firestore
-import useLiffAuth from '@/hooks/useLiffAuth';
 
 const AuthContext = createContext();
 
@@ -13,7 +12,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null); // 3. สร้าง state เก็บข้อมูล user จาก firestore
   const [loading, setLoading] = useState(true);
-  const { loading: liffLoading } = useLiffAuth();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => { // 4. เปลี่ยนเป็น async function

@@ -7,6 +7,7 @@ export default function AddUserForm() {
     name: '',
     email: '',
     lineId: '',
+    phone: '',
     password: '',
     role: 'employee', // ค่าเริ่มต้น
   });
@@ -25,10 +26,17 @@ export default function AddUserForm() {
     setIsSuccess(false);
 
     try {
+      const payload = { ...formData };
+      if (payload.phone) {
+        const digits = payload.phone.replace(/\D/g, '');
+        if (digits.length !== 10) throw new Error('หมายเลขโทรศัพท์ต้องเป็นตัวเลข 10 หลัก');
+        payload.phone = digits;
+      }
+
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -41,7 +49,7 @@ export default function AddUserForm() {
       setMessage(`สร้างผู้ใช้ ${formData.name} สำเร็จ!`);
       setIsSuccess(true);
       // Reset ฟอร์มหลังสร้างสำเร็จ
-      setFormData({ name: '', email: '', password: '', role: 'employee' });
+  setFormData({ name: '', email: '', password: '', role: 'employee', lineId: '', phone: '' });
 
     } catch (error) {
       setMessage(`เกิดข้อผิดพลาด: ${error.message}`);
@@ -66,6 +74,10 @@ export default function AddUserForm() {
         <div>
           <label className="block mb-1 text-sm font-medium text-gray-700">Line ID (ไม่บังคับ)</label>
           <input type="text" name="lineId" placeholder="Uxxxx..." value={formData.lineId} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md" />
+        </div>
+        <div>
+          <label className="block mb-1 text-sm font-medium text-gray-700">เบอร์โทร (10 หลัก)</label>
+          <input type="text" name="phone" placeholder="0812345678" value={formData.phone} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md" />
         </div>
         <div>
           <label className="block mb-1 text-sm font-medium text-gray-700">รหัสผ่าน</label>

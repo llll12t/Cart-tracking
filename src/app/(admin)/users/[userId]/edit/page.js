@@ -67,15 +67,24 @@ export default function EditUserPage() {
 		setMessage("");
 		try {
 			let imageUrl = form.imageUrl;
-			// TODO: upload imageFile to storage and get url (mock only)
-			// For now, just use local preview
+			// normalize phone
+			let phoneToSave = form.phone || null;
+			if (phoneToSave) {
+				const digits = phoneToSave.replace(/\D/g, '');
+				if (digits.length !== 10) {
+					setMessage('หมายเลขโทรศัพท์ต้องเป็นตัวเลข 10 หลัก');
+					setLoading(false);
+					return;
+				}
+				phoneToSave = digits;
+			}
 			const docRef = doc(db, "users", userId);
 			await updateDoc(docRef, {
 				name: form.name,
 				email: form.email,
 				role: form.role,
 				lineId: form.lineId || null,
-				phone: form.phone,
+				phone: phoneToSave,
 				position: form.position,
 				note: form.note,
 				imageUrl: imageUrl
@@ -104,54 +113,64 @@ export default function EditUserPage() {
 	if (loading) return <div className="p-8 text-center">กำลังโหลดข้อมูลผู้ใช้...</div>;
 
 	return (
-		<div className="max-w-lg mx-auto p-8">
-			<h1 className="text-2xl font-bold mb-8">แก้ไขข้อมูลผู้ใช้</h1>
-			<form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow">
-				<div className="flex flex-col items-center gap-4">
+		<div className="max-w-5xl mx-auto p-8">
+			<h1 className="text-2xl font-bold mb-6">แก้ไขข้อมูลผู้ใช้</h1>
+
+			<form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-6 rounded-lg shadow">
+				{/* Left: avatar */}
+				<div className="flex flex-col items-center gap-4 md:items-center md:justify-start">
 					<label className="block mb-1 text-sm font-medium">รูปโปรไฟล์</label>
 					{form.imageUrl ? (
-						<img src={form.imageUrl} alt="User" className="w-24 h-24 object-cover rounded-full border" />
+						<img src={form.imageUrl} alt="User" className="w-32 h-32 object-cover rounded-full border" />
 					) : (
-						<div className="w-24 h-24 bg-gray-200 flex items-center justify-center rounded-full border text-gray-400 text-xs">ไม่มีรูป</div>
+						<div className="w-32 h-32 bg-gray-200 flex items-center justify-center rounded-full border text-gray-400 text-xs">ไม่มีรูป</div>
 					)}
-					<input type="file" accept="image/*" onChange={handleImageChange} className="w-full" />
+					<input type="file" accept="image/*" onChange={handleImageChange} className="w-full mt-2" />
 				</div>
-				<div>
-					<label className="block mb-1 text-sm font-medium">ชื่อ</label>
-					<input name="name" value={form.name} onChange={handleChange} className="w-full p-2 border rounded" required />
-				</div>
-				<div>
-					<label className="block mb-1 text-sm font-medium">อีเมล</label>
-					<input name="email" type="email" value={form.email} onChange={handleChange} className="w-full p-2 border rounded" required />
-				</div>
-				<div>
-					<label className="block mb-1 text-sm font-medium">เบอร์โทร</label>
-					<input name="phone" value={form.phone} onChange={handleChange} className="w-full p-2 border rounded" />
-				</div>
-				<div>
-					<label className="block mb-1 text-sm font-medium">ตำแหน่ง</label>
-					<input name="position" value={form.position} onChange={handleChange} className="w-full p-2 border rounded" />
-				</div>
-				<div>
-					<label className="block mb-1 text-sm font-medium">บทบาท</label>
-					<select name="role" value={form.role} onChange={handleChange} className="w-full p-2 border rounded">
-						<option value="admin">ผู้ดูแลระบบ</option>
-						<option value="driver">พนักงานขับ</option>
-					</select>
-				</div>
-				<div>
-					<label className="block mb-1 text-sm font-medium">Line ID (optional)</label>
-					<input name="lineId" value={form.lineId} onChange={handleChange} placeholder="U1234567890" className="w-full p-2 border rounded" />
-				</div>
-				<div>
-					<label className="block mb-1 text-sm font-medium">หมายเหตุ</label>
-					<textarea name="note" value={form.note} onChange={handleChange} className="w-full p-2 border rounded" rows={2} />
-				</div>
-				{message && <p className="text-center text-sm text-teal-700">{message}</p>}
-				<div className="flex gap-4 justify-end">
-					<button type="button" onClick={handleSendReset} className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">ส่งอีเมลรีเซ็ตรหัสผ่าน</button>
-					<button type="button" onClick={() => router.back()} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
-					<button type="submit" className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700">บันทึก</button>
+
+				{/* Right: fields span two columns on md */}
+				<div className="md:col-span-2">
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div>
+							<label className="block mb-1 text-sm font-medium">ชื่อ</label>
+							<input name="name" value={form.name} onChange={handleChange} className="w-full p-2 border rounded" required />
+						</div>
+						<div>
+							<label className="block mb-1 text-sm font-medium">อีเมล</label>
+							<input name="email" type="email" value={form.email} onChange={handleChange} className="w-full p-2 border rounded" required />
+						</div>
+						<div>
+							<label className="block mb-1 text-sm font-medium">เบอร์โทร</label>
+							<input name="phone" value={form.phone} onChange={handleChange} className="w-full p-2 border rounded" />
+						</div>
+						<div>
+							<label className="block mb-1 text-sm font-medium">ตำแหน่ง</label>
+							<input name="position" value={form.position} onChange={handleChange} className="w-full p-2 border rounded" />
+						</div>
+						<div>
+							<label className="block mb-1 text-sm font-medium">บทบาท</label>
+							<select name="role" value={form.role} onChange={handleChange} className="w-full p-2 border rounded">
+								<option value="admin">ผู้ดูแลระบบ</option>
+								<option value="driver">พนักงานขับ</option>
+							</select>
+						</div>
+						<div>
+							<label className="block mb-1 text-sm font-medium">Line ID (optional)</label>
+							<input name="lineId" value={form.lineId} onChange={handleChange} placeholder="U1234567890" className="w-full p-2 border rounded" />
+						</div>
+						<div className="md:col-span-2">
+							<label className="block mb-1 text-sm font-medium">หมายเหตุ</label>
+							<textarea name="note" value={form.note} onChange={handleChange} className="w-full p-2 border rounded" rows={3} />
+						</div>
+					</div>
+
+					{message && <p className="text-left text-sm text-teal-700 mt-4">{message}</p>}
+
+					<div className="flex gap-4 justify-end mt-6">
+						<button type="button" onClick={handleSendReset} className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">ส่งอีเมลรีเซ็ตรหัสผ่าน</button>
+						<button type="button" onClick={() => router.back()} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
+						<button type="submit" className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700">บันทึก</button>
+					</div>
 				</div>
 			</form>
 		</div>

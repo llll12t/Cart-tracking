@@ -11,8 +11,8 @@ export default function AddUserPage() {
     password: '',
     role: 'employee',
     lineId: '',
+    phone: '',
   });
-  // vvvv แก้ไขบรรทัดนี้: ลบเครื่องหมาย = ออกไปหนึ่งตัว vvvv
   const [message, setMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -29,10 +29,17 @@ export default function AddUserPage() {
     setIsSuccess(false);
 
     try {
+      const payload = { ...formData };
+      if (payload.phone) {
+        const digits = payload.phone.replace(/\D/g, '');
+        if (digits.length !== 10) throw new Error('หมายเลขโทรศัพท์ต้องเป็นตัวเลข 10 หลัก');
+        payload.phone = digits;
+      }
+
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -88,6 +95,10 @@ export default function AddUserPage() {
           <div>
             <label className="block mb-1 text-sm font-medium text-gray-700">Line ID (optional)</label>
             <input type="text" name="lineId" placeholder="U1234567890" value={formData.lineId} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md"/>
+          </div>
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700">เบอร์โทร (10 หลัก)</label>
+            <input type="text" name="phone" placeholder="0812345678" value={formData.phone} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md"/>
           </div>
                 
                 {message && (
