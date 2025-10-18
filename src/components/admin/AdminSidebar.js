@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import Image from 'next/image';
 
 export default function AdminSidebar() {
   const router = useRouter();
@@ -74,11 +75,13 @@ export default function AdminSidebar() {
       <div className="mt-6 pb-4">
         <div className="flex items-center gap-3 p-2 rounded bg-gray-900">
           { (userProfile?.imageUrl || user?.photoURL) ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={userProfile?.imageUrl || user?.photoURL}
               alt="avatar"
-              className="w-10 h-10 rounded-full object-cover"
+              width={40}
+              height={40}
+              className="rounded-full object-cover"
+              unoptimized
             />
           ) : (
             <div className="w-10 h-10 rounded-full bg-teal-600 text-white flex items-center justify-center font-semibold">{(userProfile?.name || user?.displayName || user?.email?.charAt(0))?.charAt(0) || 'U'}</div>

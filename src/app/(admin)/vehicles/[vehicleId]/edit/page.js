@@ -154,12 +154,12 @@ export default function EditVehiclePage() {
             <div className="w-full">
               <label className="block mb-2 text-sm font-medium">รูปรถ</label>
               <div className="w-full bg-gray-50 rounded-lg border p-3 flex items-center justify-center">
-                {form.imageUrl ? (
-                  <img src={form.imageUrl} alt="Vehicle" className="w-full h-44 object-cover rounded" />
-                ) : (
-                  <div className="w-full h-44 bg-gray-100 flex items-center justify-center rounded text-gray-400">ไม่มีรูป</div>
-                )}
-              </div>
+                  {form.imageUrl ? (
+                    <Image src={form.imageUrl} alt="Vehicle" width={600} height={220} className="w-full h-44 object-cover rounded" unoptimized />
+                  ) : (
+                    <div className="w-full h-44 bg-gray-100 flex items-center justify-center rounded text-gray-400">ไม่มีรูป</div>
+                  )}
+                </div>
               <input type="file" accept="image/*" onChange={handleImageChange} className="mt-3 w-full" />
             </div>
 

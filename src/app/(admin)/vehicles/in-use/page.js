@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { collection, query, where, onSnapshot, doc, getDoc, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Link from "next/link";
+import Image from 'next/image';
 
 function getStatusLabel(status) {
   switch (status) {
@@ -103,8 +104,7 @@ export default function VehiclesInUsePage() {
           <div key={v.id} className="bg-white rounded-xl shadow p-4 flex flex-col">
             <div className="flex items-center gap-4">
               {v.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={v.imageUrl} alt={v.brand + ' ' + v.model} className="w-28 h-20 object-cover rounded-md border" />
+                <Image src={v.imageUrl} alt={v.brand + ' ' + v.model} width={112} height={80} className="object-cover rounded-md border" unoptimized />
               ) : (
                 <div className="w-28 h-20 bg-gray-100 rounded-md flex items-center justify-center text-sm text-gray-500 border">ไม่มีรูป</div>
               )}

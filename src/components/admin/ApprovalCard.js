@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, doc, updateDoc, writeBatch } from "firebase/firestore";
+import Image from 'next/image';
 
 // Modal Component
 function AssignVehicleModal({ booking, onClose, onAssign }) {
@@ -80,8 +81,7 @@ function AssignVehicleModal({ booking, onClose, onAssign }) {
                 >
                   {/* vehicle image */}
                   {v.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={v.imageUrl} alt={`${v.brand} ${v.model}`} className="w-20 h-14 object-cover rounded" />
+                    <Image src={v.imageUrl} alt={`${v.brand} ${v.model}`} width={80} height={56} className="object-cover rounded" unoptimized />
                   ) : (
                     <div className="w-20 h-14 bg-gray-100 rounded flex items-center justify-center text-sm text-gray-500">No Image</div>
                   )}
@@ -104,8 +104,7 @@ function AssignVehicleModal({ booking, onClose, onAssign }) {
                 return (
                   <div className="flex items-center gap-3 p-3 border rounded-md">
                     {d.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={d.imageUrl} alt={d.name} className="w-12 h-12 rounded-full object-cover" />
+                      <Image src={d.imageUrl} alt={d.name} width={48} height={48} className="rounded-full object-cover" unoptimized />
                     ) : (
                       <div className="w-12 h-12 rounded-full bg-teal-600 text-white flex items-center justify-center font-semibold">{(d.name || d.email || 'U')[0]}</div>
                     )}

@@ -5,6 +5,7 @@ import { collection, onSnapshot, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import AddVehicleForm from "@/components/admin/AddVehicleForm";
 import Link from "next/link";
+import Image from 'next/image';
 
 function VehicleList({ vehicles }) {
   const getStatusClass = (status) => {
@@ -48,7 +49,7 @@ function VehicleList({ vehicles }) {
         <div key={vehicle.id} className="bg-white rounded-xl shadow-md p-4 flex flex-col">
           <div className="flex gap-4 items-center">
             {vehicle.imageUrl ? (
-              <img src={vehicle.imageUrl} alt={`${vehicle.brand} ${vehicle.model}`} className="w-24 h-16 object-cover rounded-lg border" />
+              <Image src={vehicle.imageUrl} alt={`${vehicle.brand} ${vehicle.model}`} width={96} height={64} className="object-cover rounded-lg border" unoptimized />
             ) : (
               <div className="w-24 h-16 bg-gray-200 flex items-center justify-center text-xs text-gray-500 rounded-lg border">ไม่มีรูป</div>
             )}

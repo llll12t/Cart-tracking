@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Image from 'next/image';
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp, query, where, onSnapshot } from "firebase/firestore";
@@ -111,8 +112,7 @@ export default function BookingForm() {
                     return (
                       <>
                         {sel.imageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={sel.imageUrl} alt={`${sel.brand} ${sel.model}`} className="w-10 h-8 object-cover rounded-md border" />
+                          <Image src={sel.imageUrl} alt={`${sel.brand} ${sel.model}`} width={40} height={32} className="object-cover rounded-md border" unoptimized />
                         ) : (
                           <div className="w-10 h-8 bg-gray-200 rounded-md flex items-center justify-center text-xs text-gray-500 border">ไม่มีรูป</div>
                         )}
@@ -144,8 +144,7 @@ export default function BookingForm() {
                   className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50"
                 >
                   {v.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={v.imageUrl} alt={`${v.brand} ${v.model}`} className="w-12 h-8 object-cover rounded-md border" />
+                    <Image src={v.imageUrl} alt={`${v.brand} ${v.model}`} width={48} height={32} className="object-cover rounded-md border" unoptimized />
                   ) : (
                     <div className="w-12 h-8 bg-gray-100 rounded-md flex items-center justify-center text-xs text-gray-500 border">ไม่มีรูป</div>
                   )}
