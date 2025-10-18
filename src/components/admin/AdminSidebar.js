@@ -54,6 +54,11 @@ export default function AdminSidebar() {
               </Link>
             </li>
             <li className="mb-4">
+              <Link href="/settings" className={`block p-2 rounded hover:bg-white/20 ${usePathname() === '/settings' ? 'bg-white/20' : ''}`} aria-current={usePathname() === '/settings' ? 'page' : undefined}>
+                การตั้งค่า
+              </Link>
+            </li>
+            <li className="mb-4">
               <Link href="/users" className={`block p-2 rounded hover:bg-white/20 ${usePathname() === '/users' ? 'bg-white/20' : ''}`} aria-current={usePathname() === '/users' ? 'page' : undefined}>
                 จัดการผู้ใช้งาน
               </Link>

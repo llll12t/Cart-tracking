@@ -16,7 +16,10 @@ const useLiff = (liffId) => {
 
     useEffect(() => {
         const initializeLiff = async () => {
-            const useMock = process.env.NEXT_PUBLIC_LIFF_MOCK === '1' || process.env.NEXT_PUBLIC_LIFF_MOCK === 'true' || process.env.NODE_ENV === 'development';
+            // allow runtime override via localStorage key 'LIFF_MOCK'
+            const runtimeMock = typeof window !== 'undefined' ? window.localStorage.getItem('LIFF_MOCK') : null;
+            // Only use mock when explicitly enabled via localStorage or NEXT_PUBLIC_LIFF_MOCK
+            const useMock = (runtimeMock === '1' || runtimeMock === 'true') || process.env.NEXT_PUBLIC_LIFF_MOCK === '1' || process.env.NEXT_PUBLIC_LIFF_MOCK === 'true';
             if (useMock) {
                 console.warn("LIFF mock mode is active.");
                 const mockLiff = {
@@ -86,9 +89,9 @@ const useLiff = (liffId) => {
                 }
                 setError(userError);
 
-                // fallback: if development, provide mock
-                if (process.env.NODE_ENV === 'development') {
-                    console.warn('Setting up fallback mock data for development');
+                // If initialization fails and mock is explicitly enabled, expose a fallback mock profile.
+                if (useMock) {
+                    console.warn('LIFF init failed, but mock mode is enabled — using fallback mock data');
                     const fallback = {
                         isInClient: () => false,
                         isLoggedIn: () => false,
