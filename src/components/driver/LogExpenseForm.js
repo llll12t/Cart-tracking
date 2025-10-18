@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { db, storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc } from "firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 
 export default function LogExpenseForm({ trip, onClose }) {
@@ -61,8 +61,47 @@ export default function LogExpenseForm({ trip, onClose }) {
             if (downloadURL) {
                 expenseData.receiptImageUrl = downloadURL;
             }
-            await addDoc(collection(db, "expenses"), expenseData);
-            
+            const docRef = await addDoc(collection(db, "expenses"), expenseData);
+            console.log('Expense written with ID:', docRef.id);
+
+            // Try to also create a related record for maintenance or fuel logs so history pages show it
+            try {
+                // fetch vehicle to get current mileage
+                let vehicleMileage = null;
+                if (trip?.vehicleId) {
+                    const vehicleRef = doc(db, 'vehicles', trip.vehicleId);
+                    const vSnap = await getDoc(vehicleRef);
+                    if (vSnap.exists()) {
+                        vehicleMileage = vSnap.data().currentMileage ?? null;
+                    }
+                }
+
+                if (expenseType === 'maintenance') {
+                    await addDoc(collection(db, 'maintenances'), {
+                        vehicleId: trip.vehicleId,
+                        date: serverTimestamp(),
+                        mileage: vehicleMileage ?? null,
+                        details: details || (`ค่าใช้จ่าย: ${amount}`),
+                        cost: Number(amount),
+                        createdAt: serverTimestamp(),
+                    });
+                    console.log('Maintenance record created for vehicle', trip.vehicleId);
+                } else if (expenseType === 'fuel') {
+                    await addDoc(collection(db, 'fuel_logs'), {
+                        vehicleId: trip.vehicleId,
+                        date: serverTimestamp(),
+                        mileage: vehicleMileage ?? null,
+                        liters: null,
+                        cost: Number(amount),
+                        previousMileage: vehicleMileage ?? null,
+                    });
+                    console.log('Fuel log created for vehicle', trip.vehicleId);
+                }
+            } catch (innerErr) {
+                console.error('Error creating related record:', innerErr);
+            }
+
+            setIsLoading(false);
             setMessage('บันทึกค่าใช้จ่ายสำเร็จ!');
             setTimeout(onClose, 1500);
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from 'next/image';
 import { useRouter, useParams } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -20,9 +21,13 @@ export default function EditVehiclePage() {
     type: "",
     color: "",
     note: "",
-    imageUrl: ""
+    imageUrl: "",
+    // use the same keys as AddVehicleForm
+    taxDueDate: "",
+    insuranceExpireDate: ""
   });
   const [imageFile, setImageFile] = useState(null);
+  const [imageBroken, setImageBroken] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
@@ -34,6 +39,20 @@ export default function EditVehiclePage() {
       const snap = await getDoc(docRef);
       if (snap.exists()) {
         setVehicle(snap.data());
+        // parse date fields: Firestore may return Timestamp objects
+        // support either the old/new field names: taxDueDate or taxExpiryDate
+        const taxField = snap.data().taxDueDate || snap.data().taxExpiryDate || null;
+        const insuranceField = snap.data().insuranceExpireDate || snap.data().insuranceExpiryDate || null;
+        const toInputDate = (d) => {
+          if (!d) return "";
+          // Firestore Timestamp -> JS Date
+          if (d.seconds && typeof d.seconds === 'number') return new Date(d.seconds * 1000).toISOString().slice(0,10);
+          // JS Date
+          if (d.toDate) return d.toDate().toISOString().slice(0,10);
+          // string
+          try { return new Date(d).toISOString().slice(0,10); } catch (e) { return ""; }
+        };
+
         setForm({
           brand: snap.data().brand || "",
           model: snap.data().model || "",
@@ -44,7 +63,9 @@ export default function EditVehiclePage() {
           type: snap.data().type || "",
           color: snap.data().color || "",
           note: snap.data().note || "",
-          imageUrl: snap.data().imageUrl || ""
+          imageUrl: snap.data().imageUrl || "",
+          taxDueDate: toInputDate(taxField),
+          insuranceExpireDate: toInputDate(insuranceField)
         });
       }
       setLoading(false);
@@ -56,14 +77,36 @@ export default function EditVehiclePage() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+  const handleDateChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
   // handle image file select
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       setImageFile(file);
+      // clear any pasted URL when a local file is chosen
       setForm({ ...form, imageUrl: URL.createObjectURL(file) });
+      setImageBroken(false);
     }
   };
+
+  // handle setting image via URL paste
+  const [imageUrlInput, setImageUrlInput] = useState("");
+  const applyImageUrl = () => {
+    if (!imageUrlInput) return;
+    // clear any selected local file preview
+    setImageFile(null);
+    setForm({ ...form, imageUrl: imageUrlInput });
+    setImageUrlInput("");
+    setImageBroken(false);
+  };
+
+  // reset broken flag when image url/source changes
+  useEffect(() => {
+    setImageBroken(false);
+  }, [form.imageUrl]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -84,7 +127,10 @@ export default function EditVehiclePage() {
         type: form.type,
         color: form.color,
         note: form.note,
-        imageUrl: imageUrl
+        imageUrl: imageUrl,
+        // save as Date objects to match AddVehicleForm
+        taxDueDate: form.taxDueDate ? new Date(form.taxDueDate) : null,
+        insuranceExpireDate: form.insuranceExpireDate ? new Date(form.insuranceExpireDate) : null
       });
       setMessage("บันทึกข้อมูลรถสำเร็จ!");
       setTimeout(() => router.push(`/vehicles`), 1200);
@@ -147,6 +193,17 @@ export default function EditVehiclePage() {
               <label className="block mb-1 text-sm font-medium">หมายเหตุ</label>
               <textarea name="note" value={form.note} onChange={handleChange} className="w-full p-3 border rounded-md" rows={4} />
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block mb-1 text-sm font-medium">ภาษีรถยนต์ (หมดอายุ)</label>
+                <input name="taxDueDate" type="date" value={form.taxDueDate} onChange={handleDateChange} className="w-full p-3 border rounded-md" />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">ประกันรถยนต์ (หมดอายุ)</label>
+                <input name="insuranceExpireDate" type="date" value={form.insuranceExpireDate} onChange={handleDateChange} className="w-full p-3 border rounded-md" />
+              </div>
+            </div>
           </div>
 
           {/* right column - preview & actions */}
@@ -155,12 +212,31 @@ export default function EditVehiclePage() {
               <label className="block mb-2 text-sm font-medium">รูปรถ</label>
               <div className="w-full bg-gray-50 rounded-lg border p-3 flex items-center justify-center">
                   {form.imageUrl ? (
-                    <Image src={form.imageUrl} alt="Vehicle" width={600} height={220} className="w-full h-44 object-cover rounded" unoptimized />
+                    !imageBroken ? (
+                      <Image
+                        src={form.imageUrl}
+                        alt="Vehicle"
+                        width={600}
+                        height={220}
+                        className="w-full h-44 object-cover rounded"
+                        unoptimized
+                        onError={() => setImageBroken(true)}
+                      />
+                    ) : (
+                      // fallback to native img when Next/Image fails (works for blob: urls and cross-origin cases)
+                      // Using unoptimized above doesn't always cover blob: or blocked remote images, so display a plain <img>
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={form.imageUrl} alt="Vehicle" className="w-full h-44 object-cover rounded" />
+                    )
                   ) : (
                     <div className="w-full h-44 bg-gray-100 flex items-center justify-center rounded text-gray-400">ไม่มีรูป</div>
                   )}
                 </div>
               <input type="file" accept="image/*" onChange={handleImageChange} className="mt-3 w-full" />
+              <div className="mt-3 flex gap-2">
+                <input value={imageUrlInput} onChange={(e) => setImageUrlInput(e.target.value)} placeholder="วางลิงก์รูปที่นี่" className="flex-1 p-2 border rounded" />
+                <button type="button" onClick={applyImageUrl} className="px-3 py-2 bg-blue-600 text-white rounded">ใช้ลิงก์</button>
+              </div>
             </div>
 
             <div className="w-full bg-gray-50 p-3 rounded border text-sm">

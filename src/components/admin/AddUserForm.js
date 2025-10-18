@@ -6,6 +6,7 @@ export default function AddUserForm() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    lineId: '',
     password: '',
     role: 'employee', // ค่าเริ่มต้น
   });
@@ -61,6 +62,10 @@ export default function AddUserForm() {
         <div>
           <label className="block mb-1 text-sm font-medium text-gray-700">อีเมล</label>
           <input type="email" name="email" placeholder="john.doe@example.com" value={formData.email} onChange={handleChange} required className="w-full p-2 border border-gray-300 rounded-md"/>
+        </div>
+        <div>
+          <label className="block mb-1 text-sm font-medium text-gray-700">Line ID (ไม่บังคับ)</label>
+          <input type="text" name="lineId" placeholder="Uxxxx..." value={formData.lineId} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md" />
         </div>
         <div>
           <label className="block mb-1 text-sm font-medium text-gray-700">รหัสผ่าน</label>

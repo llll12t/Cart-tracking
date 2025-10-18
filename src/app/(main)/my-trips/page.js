@@ -241,12 +241,15 @@ function TripCard({ trip }) {
 // Page Component
 export default function MyTripsPage() {
     const { user, userProfile } = useAuth();
+    console.log('MyTripsPage - auth user:', user);
+    console.log('MyTripsPage - userProfile:', userProfile);
     const [trips, setTrips] = useState([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('ongoing'); // 'ongoing' or 'history'
     const router = useRouter();
 
     useEffect(() => {
+        console.log('MyTripsPage useEffect - user change:', user, userProfile);
         if (!user || !userProfile) {
             setLoading(false);
             return;
@@ -260,12 +263,17 @@ export default function MyTripsPage() {
         const q = query(
             collection(db, "bookings"),
             where("driverId", "==", user.uid),
-            where("status", "in", ["pending", "approved", "on_trip"]),
-            orderBy("startDateTime", "asc")
+            where("status", "in", ["pending", "approved", "on_trip"])
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const tripsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // Sort client-side by startDateTime (safely handle missing/ts)
+            tripsData.sort((a, b) => {
+                const ta = a.startDateTime?.seconds ? a.startDateTime.seconds * 1000 : new Date(a.startDateTime || 0).getTime();
+                const tb = b.startDateTime?.seconds ? b.startDateTime.seconds * 1000 : new Date(b.startDateTime || 0).getTime();
+                return ta - tb;
+            });
             setTrips(tripsData);
             setLoading(false);
         });

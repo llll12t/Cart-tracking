@@ -16,6 +16,7 @@ export default function EditUserPage() {
 		name: "",
 		email: "",
 		role: "driver",
+		lineId: "",
 		phone: "",
 		position: "",
 		note: "",
@@ -37,6 +38,7 @@ export default function EditUserPage() {
 							name: data.name || "",
 							email: data.email || "",
 							role: data.role || "driver",
+							lineId: data.lineId || "",
 							phone: data.phone || "",
 							position: data.position || "",
 							note: data.note || "",
@@ -72,6 +74,7 @@ export default function EditUserPage() {
 				name: form.name,
 				email: form.email,
 				role: form.role,
+				lineId: form.lineId || null,
 				phone: form.phone,
 				position: form.position,
 				note: form.note,
@@ -135,6 +138,10 @@ export default function EditUserPage() {
 						<option value="admin">ผู้ดูแลระบบ</option>
 						<option value="driver">พนักงานขับ</option>
 					</select>
+				</div>
+				<div>
+					<label className="block mb-1 text-sm font-medium">Line ID (optional)</label>
+					<input name="lineId" value={form.lineId} onChange={handleChange} placeholder="U1234567890" className="w-full p-2 border rounded" />
 				</div>
 				<div>
 					<label className="block mb-1 text-sm font-medium">หมายเหตุ</label>

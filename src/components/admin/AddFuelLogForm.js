@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, query, orderBy, limit, getDocs } from "firebase/firestore";
+import { collection, addDoc, query, orderBy, limit, getDocs, where } from "firebase/firestore";
 
 export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
   const [formData, setFormData] = useState({
@@ -13,11 +13,13 @@ export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
   });
   const [previousMileage, setPreviousMileage] = useState(0);
   const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ดึงเลขไมล์ครั้งล่าสุดเพื่อคำนวณอัตราสิ้นเปลือง
   useEffect(() => {
     const q = query(
       collection(db, "fuel_logs"),
+      where('vehicleId', '==', vehicleId),
       orderBy("mileage", "desc"),
       limit(1)
     );
@@ -34,7 +36,23 @@ export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
+      // Prevent duplicate: check same vehicle + mileage already exists
+      const existingQ = query(
+        collection(db, "fuel_logs"),
+        where('vehicleId', '==', vehicleId),
+        where('mileage', '==', Number(formData.mileage)),
+        limit(1)
+      );
+      const existingSnap = await getDocs(existingQ);
+      if (!existingSnap.empty) {
+        setMessage('มีรายการเติมน้ำมันสำหรับเลขไมล์นี้แล้ว');
+        setIsSubmitting(false);
+        return;
+      }
+
       await addDoc(collection(db, "fuel_logs"), {
         vehicleId,
         date: new Date(formData.date),
@@ -48,6 +66,8 @@ export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
     } catch (error) {
       setMessage('เกิดข้อผิดพลาดในการบันทึก');
       console.error(error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -63,7 +83,7 @@ export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
           {message && <p className="text-center">{message}</p>}
           <div className="flex justify-end gap-4 pt-4">
             <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
-            <button type="submit" className="px-4 py-2 text-white bg-green-600 rounded hover:bg-green-700">บันทึก</button>
+            <button type="submit" disabled={isSubmitting} className="px-4 py-2 text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50">{isSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}</button>
           </div>
         </form>
       </div>

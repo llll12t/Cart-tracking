@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Image from 'next/image';
 
@@ -29,43 +29,33 @@ export default function AdminSidebar() {
         <nav>
           <ul>
             <li className="mb-4">
-              <Link
-                href="/dashboard"
-                className="block p-2 rounded hover:bg-white/20"
-              >
-                ภาพรวม (Dashboard)
+              <Link href="/dashboard" className={`block p-2 rounded hover:bg-white/20 ${usePathname() === '/dashboard' ? 'bg-white/20' : ''}`} aria-current={usePathname() === '/dashboard' ? 'page' : undefined}>
+                ภาพรวม
               </Link>
             </li>
             <li className="mb-4">
-              <Link
-                href="/approvals"
-                className="block p-2 rounded hover:bg-white/20"
-              >
-                จัดการคำขอ (Approvals)
+              <Link href="/approvals" className={`block p-2 rounded hover:bg-white/20 ${usePathname() === '/approvals' ? 'bg-white/20' : ''}`} aria-current={usePathname() === '/approvals' ? 'page' : undefined}>
+                จัดการคำขอ
               </Link>
             </li>
             <li className="mb-4">
-              <Link
-                href="/vehicles"
-                className="block p-2 rounded hover:bg-white/20"
-              >
-                จัดการรถ (Vehicles)
+              <Link href="/vehicles" className={`block p-2 rounded hover:bg-white/20 ${usePathname() === '/vehicles' ? 'bg-white/20' : ''}`} aria-current={usePathname() === '/vehicles' ? 'page' : undefined}>
+                จัดการรถ
               </Link>
             </li>
             <li className="mb-4">
-              <Link
-                href="/vehicles-analysis"
-                className="block p-2 rounded hover:bg-white/20"
-              >
+              <Link href="/maintenance" className={`block p-2 rounded hover:bg-white/20 ${usePathname() === '/maintenance' ? 'bg-white/20' : ''}`} aria-current={usePathname() === '/maintenance' ? 'page' : undefined}>
+                ส่งซ่อม
+              </Link>
+            </li>
+            <li className="mb-4">
+              <Link href="/vehicles-analysis" className={`block p-2 rounded hover:bg-white/20 ${usePathname() === '/vehicles-analysis' ? 'bg-white/20' : ''}`} aria-current={usePathname() === '/vehicles-analysis' ? 'page' : undefined}>
                 วิเคราะห์การใช้งานรถ
               </Link>
             </li>
             <li className="mb-4">
-              <Link
-                href="/users"
-                className="block p-2 rounded hover:bg-white/20"
-              >
-                จัดการผู้ใช้งาน (Users)
+              <Link href="/users" className={`block p-2 rounded hover:bg-white/20 ${usePathname() === '/users' ? 'bg-white/20' : ''}`} aria-current={usePathname() === '/users' ? 'page' : undefined}>
+                จัดการผู้ใช้งาน
               </Link>
             </li>
           </ul>

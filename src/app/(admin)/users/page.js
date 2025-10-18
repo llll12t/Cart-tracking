@@ -20,7 +20,7 @@ function UserCard({ user, onDelete }) {
   };
 
   return (
-    <div className="p-4 bg-white rounded-lg shadow-sm border flex items-center gap-4">
+  <div className="p-4 bg-white rounded-lg shadow-sm flex items-center gap-4">
       {/* avatar */}
       <div className="flex-shrink-0">
         {user.imageUrl ? (

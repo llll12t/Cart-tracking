@@ -26,9 +26,9 @@ export async function POST(request) {
   }
 
   try {
-    const { email, password, name, role } = await request.json();
+  const { email, password, name, role, lineId } = await request.json();
 
-    if (!email || !password || !name || !role) {
+  if (!email || !password || !name || !role) {
         return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
     }
     if (password.length < 6) {
@@ -43,12 +43,15 @@ export async function POST(request) {
     });
 
     // 2. สร้างโปรไฟล์ผู้ใช้ใน Firestore
-    await admin.firestore().collection('users').doc(userRecord.uid).set({
+    const userDoc = {
       name: name,
       email: email,
       role: role,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    };
+    if (lineId) userDoc.lineId = lineId;
+
+    await admin.firestore().collection('users').doc(userRecord.uid).set(userDoc);
 
     return NextResponse.json({ message: 'User created successfully', uid: userRecord.uid }, { status: 201 });
 

@@ -46,6 +46,7 @@ export default function AdminDashboardPage() {
     const [stats, setStats] = useState({ available: 0, inUse: 0, maintenance: 0, pending: 0 });
     const [alerts, setAlerts] = useState({ tax: [], insurance: [] });
     const [loading, setLoading] = useState(true);
+    // maintenanceVehicles list removed per request
 
     useEffect(() => {
         // ดึงข้อมูลสรุปสถานะรถ
@@ -74,7 +75,6 @@ export default function AdminDashboardPage() {
         const unsubBookings = onSnapshot(bookingsQuery, (snapshot) => {
             setStats(prev => ({ ...prev, pending: snapshot.size }));
         });
-        
         setLoading(false);
 
         return () => {
@@ -93,7 +93,7 @@ export default function AdminDashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard title="รถว่าง" value={stats.available} icon="✅" link="/vehicles" />
                     <StatCard title="กำลังใช้งาน" value={stats.inUse} icon="🚗" link="/vehicles/in-use" />
-                    <StatCard title="ซ่อมบำรุง" value={stats.maintenance} icon="🔧" link="/vehicles" />
+                    <StatCard title="ซ่อมบำรุง" value={stats.maintenance} icon="🔧" link="/maintenance" />
                 <StatCard title="คำขอรออนุมัติ" value={stats.pending} icon="🔔" link="/approvals" />
             </div>
 
@@ -102,6 +102,8 @@ export default function AdminDashboardPage() {
                 <AlertList title="ภาษีรถยนต์จะหมดอายุใน 30 วัน" items={alerts.tax} type="tax" />
                 <AlertList title="ประกันรถยนต์จะหมดอายุใน 30 วัน" items={alerts.insurance} type="insurance" />
             </div>
+
+            {/* vehicles-under-maintenance list removed per request */}
         </div>
     );
 }

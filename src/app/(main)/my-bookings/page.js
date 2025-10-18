@@ -24,15 +24,30 @@ function BookingCard({ booking }) {
         }
     }, [booking.vehicleId]);
 
-    const formatDate = (timestamp) => {
-        if (!timestamp?.seconds) return '-';
-        return new Date(timestamp.seconds * 1000).toLocaleString('th-TH', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
+    const formatDate = (d) => {
+        if (!d) return '-';
+        // Firestore Timestamp
+        if (d.seconds && typeof d.seconds === 'number') {
+            return new Date(d.seconds * 1000).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+        // JS Date
+        if (d instanceof Date) return d.toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        // ISO string
+        try {
+            const parsed = new Date(d);
+            if (!isNaN(parsed)) return parsed.toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        } catch (e) {}
+        return '-';
+    };
+
+    const getBookingDate = (bk, type) => {
+        // type: 'start' | 'end'
+        const candidates = {
+            start: [bk.startDate, bk.startDateTime, bk.start],
+            end: [bk.endDate, bk.endDateTime, bk.end]
+        }[type] || [];
+        for (const c of candidates) if (c) return c;
+        return null;
     };
 
     const getStatusText = (status) => {
@@ -113,14 +128,15 @@ function BookingCard({ booking }) {
                         )}
                         <div className="flex justify-between">
                             <span className="font-semibold">วันเริ่มต้น</span>
-                            <span className="text-gray-600">{formatDate(booking.startDateTime)}</span>
+                            <span className="text-gray-600">{formatDate(getBookingDate(booking,'start') || booking.createdAt)}</span>
                         </div>
-                        {booking.endDateTime && (
+                        {getBookingDate(booking,'end') && (
                             <div className="flex justify-between">
                                 <span className="font-semibold">วันสิ้นสุด</span>
-                                <span className="text-gray-600">{formatDate(booking.endDateTime)}</span>
+                                <span className="text-gray-600">{formatDate(getBookingDate(booking,'end'))}</span>
                             </div>
                         )}
+                        {/* createdAt / userEmail intentionally hidden per request */}
                     </div>
 
                     {/* Purpose Section */}
@@ -147,29 +163,37 @@ function BookingCard({ booking }) {
 }
 
 export default function MyBookingsPage() {
-  const { user, userProfile } = useAuth();
+    const { user, userProfile, loading: authLoading } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('history');
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user) return;
+    useEffect(() => {
+        // wait for auth to resolve first
+        if (authLoading) return;
 
-    const q = query(
-        collection(db, "bookings"), 
-        where("userId", "==", user.uid),
-        orderBy("createdAt", "desc")
-    );
+        if (!user) {
+            // not signed in -> no bookings to load
+            setBookings([]);
+            setLoading(false);
+            return;
+        }
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const userBookings = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setBookings(userBookings);
-      setLoading(false);
-    });
+        const q = query(
+                collection(db, "bookings"), 
+                where("userId", "==", user.uid),
+                orderBy("createdAt", "desc")
+        );
 
-    return () => unsubscribe();
-  }, [user]);
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const userBookings = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setBookings(userBookings);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [user, authLoading]);
 
   if (loading) {
     return (

@@ -10,6 +10,7 @@ export default function AddUserPage() {
     email: '',
     password: '',
     role: 'employee',
+    lineId: '',
   });
   // vvvv แก้ไขบรรทัดนี้: ลบเครื่องหมาย = ออกไปหนึ่งตัว vvvv
   const [message, setMessage] = useState('');
@@ -84,6 +85,10 @@ export default function AddUserPage() {
                         <option value="admin">ผู้ดูแลระบบ (Admin)</option>
                     </select>
                 </div>
+          <div>
+            <label className="block mb-1 text-sm font-medium text-gray-700">Line ID (optional)</label>
+            <input type="text" name="lineId" placeholder="U1234567890" value={formData.lineId} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md"/>
+          </div>
                 
                 {message && (
                     <p className={`text-center text-sm ${isSuccess ? 'text-green-600' : 'text-red-600'}`}>{message}</p>
