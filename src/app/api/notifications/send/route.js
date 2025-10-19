@@ -95,6 +95,33 @@ export async function POST(req) {
     // Compose messages and targets
     const messagesToSend = [];
 
+    // helper: extract first uri found in a Flex contents object
+    function extractUriFromFlex(flex) {
+      if (!flex || !flex.contents) return '';
+      const seen = new Set();
+      function walk(obj) {
+        if (!obj || typeof obj !== 'object' || seen.has(obj)) return '';
+        seen.add(obj);
+        if (Array.isArray(obj)) {
+          for (const item of obj) {
+            const r = walk(item);
+            if (r) return r;
+          }
+          return '';
+        }
+        // check for action.uri
+        if (obj.action && obj.action.uri) return obj.action.uri;
+        for (const k of Object.keys(obj)) {
+          try {
+            const r = walk(obj[k]);
+            if (r) return r;
+          } catch (e) {}
+        }
+        return '';
+      }
+      return walk(flex.contents);
+    }
+
     // Notify admin when booking created or vehicle returned
     if (event === 'booking_created' && shouldNotify('admin', 'booking_created')) {
       // find admin targets from config; if none, query users collection for admins with lineId
@@ -108,28 +135,31 @@ export async function POST(req) {
         adminTargets = usersSnap.docs.map(d => d.data()?.lineId).filter(Boolean);
       }
       const flex = bookingCreatedAdmin(booking);
-      for (const t of adminTargets) messagesToSend.push({ to: t, payload: flex });
+      for (const t of adminTargets) {
+        const computedUri = extractUriFromFlex(flex) || '';
+        messagesToSend.push({ to: t, payload: flex, computedUri });
+      }
     }
 
     if (event === 'booking_created' && shouldNotify('driver', 'booking_created')) {
       // notify assigned driver if exists (booking.vehicleDriverId)
       if (booking.driverLineId) {
         const flex = bookingCreatedEmployee(booking);
-        messagesToSend.push({ to: booking.driverLineId, payload: flex });
+        messagesToSend.push({ to: booking.driverLineId, payload: flex, computedUri: extractUriFromFlex(flex) || '' });
       }
     }
 
     if (event === 'booking_approved' && shouldNotify('driver', 'booking_approved')) {
       if (booking.driverLineId) {
         const flex = bookingApprovedDriver(booking);
-        messagesToSend.push({ to: booking.driverLineId, payload: flex });
+        messagesToSend.push({ to: booking.driverLineId, payload: flex, computedUri: extractUriFromFlex(flex) || '' });
       }
     }
 
     if (event === 'vehicle_sent' && shouldNotify('driver', 'vehicle_sent')) {
       if (booking.driverLineId) {
         const flex = vehicleSentDriver(booking);
-        messagesToSend.push({ to: booking.driverLineId, payload: flex });
+        messagesToSend.push({ to: booking.driverLineId, payload: flex, computedUri: extractUriFromFlex(flex) || '' });
       }
     }
 
@@ -145,11 +175,11 @@ export async function POST(req) {
           adminTargets = usersSnap.docs.map(d => d.data()?.lineId).filter(Boolean);
         }
         const flex = vehicleReturnedAdmin(booking);
-        for (const t of adminTargets) messagesToSend.push({ to: t, payload: flex });
+        for (const t of adminTargets) messagesToSend.push({ to: t, payload: flex, computedUri: extractUriFromFlex(flex) || '' });
       }
       if (shouldNotify('employee', 'vehicle_returned') && booking.requesterLineId) {
         const flex = vehicleReturnedEmployee(booking);
-        messagesToSend.push({ to: booking.requesterLineId, payload: flex });
+        messagesToSend.push({ to: booking.requesterLineId, payload: flex, computedUri: extractUriFromFlex(flex) || '' });
       }
     }
 
@@ -157,11 +187,12 @@ export async function POST(req) {
     const results = [];
     for (const m of messagesToSend) {
       try {
+        console.log('Sending LINE message', { to: m.to, computedUri: m.computedUri || '' });
         const r = await pushLineMessage(m.to, m.payload || m.text || m);
-        results.push({ to: m.to, ok: !!r.ok, info: r });
+        results.push({ to: m.to, ok: !!r.ok, info: r, computedUri: m.computedUri || '' });
       } catch (err) {
         console.error('Failed to send LINE message', err, m);
-        results.push({ to: m.to, ok: false, error: String(err) });
+        results.push({ to: m.to, ok: false, error: String(err), computedUri: m.computedUri || '' });
       }
     }
 

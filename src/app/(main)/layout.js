@@ -14,7 +14,7 @@ export default function MainLayout({ children }) {
   const [linkMessage, setLinkMessage] = useState('');
 
   if (loading || liffLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return <div className="flex items-center justify-center min-h-screen"><LiffQueryRouter />Loading...</div>;
   }
 
   // If LIFF sign-in returned a needsLink, show a small form to enter phone number
@@ -22,6 +22,7 @@ export default function MainLayout({ children }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
         <div className="bg-white p-6 rounded shadow max-w-md w-full">
+          <LiffQueryRouter />
           <h2 className="text-lg font-bold mb-2">ผูกบัญชีด้วยหมายเลขโทรศัพท์</h2>
           <p className="text-sm text-gray-600 mb-4">เราไม่พบบัญชีพนักงานที่เชื่อมกับ LINE นี้ ({linkProfile?.displayName || ''}). โปรดกรอกหมายเลขโทรศัพท์ที่ลงทะเบียนกับระบบ เพื่อผูกบัญชีเข้าด้วยกัน</p>
           <input value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} placeholder="เบอร์โทร (ตัวอย่าง: 0812345678)" className="w-full p-2 border rounded mb-3" />
@@ -47,7 +48,7 @@ export default function MainLayout({ children }) {
 
   // หากไม่มี user login อยู่ ให้แสดงหน้าว่างๆ (middleware จะจัดการ redirect)
   if (!user) {
-    return null;
+    return <LiffQueryRouter />;
   }
 
   return (

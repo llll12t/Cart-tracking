@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
+import LiffQueryRouter from '@/components/main/LiffQueryRouter';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -27,6 +28,7 @@ export default function LoginPage() {
 
   return (
     <main className="flex items-center justify-center min-h-screen bg-gray-100">
+      <LiffQueryRouter />
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
         <h1 className="text-2xl font-bold text-center text-gray-900">
           Fleet Management Login
