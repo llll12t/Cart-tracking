@@ -3,7 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import useLiffAuth from '@/hooks/useLiffAuth';
 import { useState } from 'react';
-import LiffQueryRouter from '@/components/LiffQueryRouter';
+import LiffQueryRouter from '@/components/main/LiffQueryRouter';
 
 // Layout หลักสำหรับพนักงาน
 export default function MainLayout({ children }) {

@@ -54,6 +54,16 @@ function baseBubble(title, fields = [], footerText = '', actions = null) {
   return bubble;
 }
 
+function buildConfirmUri(base, bookingId) {
+  if (!base || !bookingId) return '';
+  const b = base.replace(/\/$/, '');
+  // if base already includes the confirm path, just append the id
+  if (b.includes('/confirm/booking')) {
+    return `${b.replace(/\/$/, '')}/${bookingId}`;
+  }
+  return `${b}/confirm/booking/${bookingId}`;
+}
+
 export function bookingCreatedAdmin(booking) {
   const title = 'คำขอจองรถใหม่';
   const fields = [
@@ -62,10 +72,9 @@ export function bookingCreatedAdmin(booking) {
     `วันที่: ${fmtDate(booking.startDate)} → ${fmtDate(booking.endDate)}`
   ];
   const base = process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || '';
-  const confirmLiffId = process.env.NEXT_CONFIRM_LIFF_ID || process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID || process.env.NEXT_PUBLIC_LIFF_ID || process.env.LIFF_ID || '';
+  const confirmLiffId = process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID || '';
   const bookingId = booking.id || booking.bookingId || booking._id || '';
-  const confirmPath = `/confirm/booking/${bookingId}`;
-  let uri = base ? `${base.replace(/\/$/, '')}${confirmPath}` : '';
+  let uri = base ? buildConfirmUri(base, bookingId) : '';
   // fallback to LIFF deep link (https) if base URL not configured but LIFF id is available
   if (!uri && confirmLiffId && bookingId) uri = `https://liff.line.me/${confirmLiffId}?bookingId=${bookingId}`;
   const actions = uri && /^https?:\/\//i.test(uri) ? { uri, label: 'ยืนยัน' } : null;
@@ -79,9 +88,9 @@ export function bookingCreatedEmployee(booking) {
     `วันที่: ${fmtDate(booking.startDate)} → ${fmtDate(booking.endDate)}`
   ];
   const base = process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || '';
-  const confirmLiffId = process.env.NEXT_CONFIRM_LIFF_ID || process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID || process.env.NEXT_PUBLIC_LIFF_ID || process.env.LIFF_ID || '';
+  const confirmLiffId = process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID || '';
   const bookingId = booking.id || booking.bookingId || booking._id || '';
-  let uri = base ? `${base.replace(/\/$/, '')}/confirm/booking/${bookingId}` : '';
+  let uri = base ? buildConfirmUri(base, bookingId) : '';
   if (!uri && confirmLiffId && bookingId) uri = `https://liff.line.me/${confirmLiffId}?bookingId=${bookingId}`;
   const actions = uri && /^https?:\/\//i.test(uri) ? { uri, label: 'ดูคำขอ / ยืนยัน' } : null;
   return { altText: 'คำขอจองของคุณถูกส่งแล้ว', contents: baseBubble(title, fields, '', actions) };
@@ -113,9 +122,9 @@ export function vehicleReturnedAdmin(booking) {
     `คืนโดย: ${booking.requesterName || '-'}`
   ];
   const base = process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || '';
-  const confirmLiffId = process.env.NEXT_CONFIRM_LIFF_ID || process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID || process.env.NEXT_PUBLIC_LIFF_ID || process.env.LIFF_ID || '';
+  const confirmLiffId = process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID || '';
   const bookingId = booking.id || booking.bookingId || booking._id || '';
-  let uri = base ? `${base.replace(/\/$/, '')}/confirm/booking/${bookingId}` : '';
+  let uri = base ? buildConfirmUri(base, bookingId) : '';
   if (!uri && confirmLiffId && bookingId) uri = `https://liff.line.me/${confirmLiffId}?bookingId=${bookingId}`;
   const actions = uri && /^https?:\/\//i.test(uri) ? { uri, label: 'ยืนยันการคืน' } : null;
   return { altText: 'รถถูกคืนแล้ว', contents: baseBubble(title, fields, '', actions) };
