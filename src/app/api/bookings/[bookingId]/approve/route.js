@@ -12,29 +12,43 @@ async function verifyLineIdToken(idToken) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ id_token: idToken, client_id: process.env.NEXT_PUBLIC_LIFF_CLIENT_ID || process.env.NEXT_PUBLIC_LIFF_ID })
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.sub || data.userId || null;
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (e) { /* not json */ }
+    if (!res.ok) {
+      console.error('LINE verify failed', { status: res.status, body: text });
+      return { error: text, status: res.status };
+    }
+    return { sub: data?.sub || data?.userId || null };
   } catch (err) {
     console.error('verifyLineIdToken error', err);
-    return null;
+    return { error: String(err) };
   }
 }
 
-export async function POST(req, { params }) {
+export async function POST(req) {
   try {
-    const bookingId = params.bookingId;
+    const url = new URL(req.url);
+    const parts = url.pathname.split('/').filter(Boolean);
+    // pathname ... /api/bookings/{bookingId}/approve
+    const bookingId = parts.length >= 3 ? parts[parts.length - 2] : parts[parts.length - 1];
     if (!bookingId) return NextResponse.json({ ok: false, error: 'missing id' }, { status: 400 });
     const body = await req.json();
     const { idToken } = body || {};
 
+    let lineVerify = null;
     let lineUserId = null;
     if (idToken) {
-      lineUserId = await verifyLineIdToken(idToken);
+      lineVerify = await verifyLineIdToken(idToken);
+      if (lineVerify && lineVerify.sub) lineUserId = lineVerify.sub;
     }
 
-    // if no lineUserId, try to read from request (not secure) -> reject
-    if (!lineUserId) return NextResponse.json({ ok: false, error: 'invalid line token' }, { status: 401 });
+    // if verification failed, return diagnostic to help debug
+    if (!lineUserId) {
+      const diag = (lineVerify && lineVerify.error) ? `LINE verify failed: ${lineVerify.error}` : 'invalid line token';
+      console.error('Approve rejected -', diag);
+      return NextResponse.json({ ok: false, error: diag }, { status: 401 });
+    }
 
     // check if lineUserId belongs to an admin
     const usersSnap = await db.collection('users').where('role', '==', 'admin').where('lineId', '==', lineUserId).get();
