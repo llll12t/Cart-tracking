@@ -61,10 +61,25 @@ const useLiff = (liffId) => {
                 await liff.init({ liffId });
 
                 const params = new URLSearchParams(window.location.search);
-                const redirectPath = params.get('liff.state');
-                if (redirectPath) {
-                    window.location.replace(redirectPath);
-                    return;
+                const redirectPathRaw = params.get('liff.state');
+                if (redirectPathRaw) {
+                    try {
+                        const decoded = decodeURIComponent(redirectPathRaw || '');
+                        // normalize: if decoded starts with '?', attach to current pathname; if starts with '/', use as absolute path; if it's an absolute URL, use it as-is
+                        let target = decoded;
+                        if (decoded.startsWith('?')) {
+                            target = window.location.pathname + decoded;
+                        } else if (!decoded.startsWith('/') && !/^https?:\/\//.test(decoded)) {
+                            // if it's missing leading slash but looks like a path, add one
+                            target = '/' + decoded;
+                        }
+                        window.location.replace(target);
+                        return;
+                    } catch (e) {
+                        // if decode fails, fall back to raw value
+                        window.location.replace(redirectPathRaw);
+                        return;
+                    }
                 }
 
                 if (!liff.isLoggedIn()) {
