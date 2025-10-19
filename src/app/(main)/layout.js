@@ -3,6 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import useLiffAuth from '@/hooks/useLiffAuth';
 import { useState } from 'react';
+import LiffQueryRouter from '@/components/LiffQueryRouter';
 
 // Layout หลักสำหรับพนักงาน
 export default function MainLayout({ children }) {
@@ -51,6 +52,7 @@ export default function MainLayout({ children }) {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <LiffQueryRouter />
       {children}
     </div>
   );

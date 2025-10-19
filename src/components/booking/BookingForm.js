@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
@@ -24,6 +25,7 @@ export default function BookingForm() {
   const [isMileageEditing, setIsMileageEditing] = useState(false);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   // ดึงรายการรถที่พร้อมใช้งาน
   useEffect(() => {
@@ -93,7 +95,8 @@ export default function BookingForm() {
         createdAt: serverTimestamp(),
       };
 
-      await addDoc(collection(db, "bookings"), bookingData);
+  const docRef = await addDoc(collection(db, "bookings"), bookingData);
+  const bookingId = docRef.id;
 
       setMessage("ส่งคำขอจองรถสำเร็จ!");
       // Reset form
@@ -106,6 +109,30 @@ export default function BookingForm() {
     setStartDate(new Date().toISOString().slice(0,10));
     setEndDate(new Date().toISOString().slice(0,10));
       setIsLoading(false);
+      // send notification to backend so it can push to LINE OA
+      try {
+        await fetch('/api/notifications/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'booking_created',
+            booking: {
+              id: bookingId,
+              requesterName: bookingData.requesterName,
+              userEmail: bookingData.userEmail,
+              requesterLineId: userProfile?.lineId || null,
+              vehicleLicensePlate: bookingData.vehicleLicensePlate,
+              startDate: bookingData.startDate,
+              endDate: bookingData.endDate
+            }
+          })
+        });
+      } catch (err) {
+        console.error('notify error', err);
+      }
+
+      // navigate to bookings list so the user sees their request
+      router.push('/my-bookings');
     } catch (error) {
       console.error("Error creating booking: ", error);
       setMessage("เกิดข้อผิดพลาดในการส่งคำขอ");
@@ -183,30 +210,30 @@ export default function BookingForm() {
         
         {/* (เลขไมล์) - แสดง/แก้ไขที่ส่วนถัดไป */}
         <div>
-                        <label className="block text-sm font-medium text-teal-700 mb-1">เลขไมล์</label>
+          <label className="block text-sm font-medium text-teal-700 mb-1">เลขไมล์</label>
 
           {!isMileageEditing ? (
             <div className="flex items-center gap-3">
               <div className="flex-1 px-4 py-3 border border-gray-200 rounded-lg bg-gray-50">{mileage || '-'}</div>
-              <button type="button" onClick={() => setIsMileageEditing(true)} className="px-3 py-2 bg-blue-600 text-white rounded">แก้ไข</button>
+              <button type="button" onClick={() => setIsMileageEditing(true)} className="px-3 py-2 bg-gray-100 text-black rounded">แก้ไข</button>
             </div>
           ) : (
             <div className="flex items-center gap-3">
               <input type="number" value={mileage} onChange={(e) => setMileage(e.target.value)} className="flex-1 px-4 py-3 border border-gray-300 rounded-lg" />
-              <button type="button" onClick={() => { setIsMileageEditing(false); }} className="px-3 py-2 bg-gray-200 rounded">ยกเลิก</button>
+              <button type="button" onClick={() => { setIsMileageEditing(false); }} className="p-3 bg-gray-200 rounded">ยกเลิก</button>
             </div>
           )}
         </div>
         
         {/* จุดเริ่ม (คงที่) และ จุดหมาย */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="flex">
           <div>
             <label className="block text-sm font-medium text-teal-700 mb-1">จุดหมาย</label>
             <input 
               type="text" 
               value={destination}
               onChange={(e) => setDestination(e.target.value)}
-              placeholder="เชียงใหม่"
+              placeholder="ระบุ"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
               required
             />
@@ -225,6 +252,10 @@ export default function BookingForm() {
               required
             />
           </div>
+        </div>
+                {/* กำหนดการ (วันที่เริ่ม - วันที่สิ้นสุด) */}
+        <div className="grid grid-cols-2 gap-4">
+
           <div>
             <label className="block text-sm font-medium text-teal-700 mb-1">วันที่สิ้นสุด</label>
             <input
