@@ -9,7 +9,7 @@ export default function ConfirmBookingPage() {
   const params = useParams();
   const bookingId = params?.bookingId;
   // only use NEXT_PUBLIC_* env vars here so the value is available in the browser
-  const confirmLiffId = process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID || process.env.NEXT_PUBLIC_LIFF_ID;
+  const confirmLiffId = process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID;
   const { liff, profile, loading: liffLoading, error: liffError } = useLiff(confirmLiffId);
   const [booking, setBooking] = useState(null);
   const [message, setMessage] = useState('');
