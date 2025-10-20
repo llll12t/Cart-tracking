@@ -1,7 +1,7 @@
 // src/app/api/firebase-custom-token/route.js
 
 import { NextResponse } from 'next/server';
-import { auth as adminAuth } from '@/lib/firebaseAdmin'; // 1. Import Admin SDK
+import admin from '@/lib/firebaseAdmin'; // 1. Import Admin SDK (default export)
 import { Client } from '@line/bot-sdk'; // 2. Import LINE SDK สำหรับตรวจสอบ Token
 
 // 3. ตั้งค่า LINE Client ด้วยค่าจาก .env.local
@@ -32,7 +32,7 @@ export async function POST(request) {
     const uid = lineProfile.userId; // 5. ใช้ userId ที่ได้จากการ verify แล้วเท่านั้น
 
     // 6. สร้าง Custom Token จาก Firebase Admin SDK
-    const customToken = await adminAuth.createCustomToken(uid);
+  const customToken = await admin.auth().createCustomToken(uid);
 
     return NextResponse.json({ customToken });
 

@@ -1,7 +1,18 @@
 import { NextResponse } from 'next/server';
 import admin from '@/lib/firebaseAdmin';
 import fetch from 'node-fetch';
-import { bookingCreatedAdmin } from '@/lib/lineFlexMessages';
+import {
+  bookingCreatedAdmin,
+  bookingApprovalRequestAdmin,
+  bookingApprovedAdmin,
+  vehicleSentAdmin,
+  vehicleReturnedAdmin,
+  bookingCreatedDriver,
+  bookingApprovedDriver,
+  vehicleSentDriver,
+  vehicleReturnedDriver,
+  bookingCreatedEmployee
+} from '@/lib/lineFlexMessages';
 
 const db = admin.firestore();
 const LINE_PUSH_ENDPOINT = 'https://api.line.me/v2/bot/message/push';
@@ -70,17 +81,35 @@ export async function POST(req) {
 
     const b = normalizeBooking(booking);
 
-    // build messages depending on event (admin only)
-    let adminMsg = null;
-    switch (event) {
-      case 'booking_created':
-      case 'booking_approval_request':
-      case 'booking_approved':
-      case 'vehicle_sent':
-      case 'vehicle_returned':
-      default:
-        adminMsg = bookingCreatedAdmin(b);
-    }
+      // Load notification settings (with defaults)
+      let notifSettings = { roles: {} };
+      try {
+        const cfgSnap = await db.collection('appConfig').doc('notifications').get();
+        if (cfgSnap.exists) notifSettings = cfgSnap.data();
+      } catch (e) {
+        console.error('Failed to load notification settings, using defaults', e);
+      }
+
+    // Build message templates for roles/events
+    const templates = {
+      admin: {
+        booking_created: bookingCreatedAdmin(b),
+        booking_approval_request: bookingApprovalRequestAdmin(b),
+        booking_approved: bookingApprovedAdmin(b),
+        vehicle_sent: vehicleSentAdmin(b),
+        vehicle_returned: vehicleReturnedAdmin(b)
+      },
+      driver: {
+        booking_created: bookingCreatedDriver(b),
+        booking_approved: bookingApprovedDriver(b),
+        vehicle_sent: vehicleSentDriver(b),
+        vehicle_returned: vehicleReturnedDriver(b)
+      },
+      employee: {
+        booking_created: bookingCreatedEmployee(b),
+        vehicle_returned: vehicleReturnedAdmin(b)
+      }
+    };
 
     const results = { sent: [], skipped: [], errors: [] };
 
@@ -98,12 +127,20 @@ export async function POST(req) {
       const ud = doc.data();
       const lineId = ud?.lineId;
       const role = ud?.role;
-      if (role !== 'admin') continue;
+      // Only notify admins/employees here — but consult settings to decide per-role/event
+      if (!['admin', 'employee'].includes(role)) continue;
+      // check settings for this role and event
+      const roleSettings = (notifSettings.roles && notifSettings.roles[role]) || {};
+      const enabled = typeof roleSettings[event] === 'boolean' ? roleSettings[event] : true;
+      if (!enabled) {
+        results.skipped.push({ uid: doc.id, reason: 'setting_disabled' });
+        continue;
+      }
       if (!lineId) {
         results.skipped.push({ uid: doc.id, reason: 'no_lineId' });
         continue;
       }
-      let msgToSend = adminMsg;
+  const msgToSend = templates[role] ? templates[role][event] : null;
       if (!msgToSend) {
         results.skipped.push({ uid: doc.id, reason: 'no_message' });
         continue;
