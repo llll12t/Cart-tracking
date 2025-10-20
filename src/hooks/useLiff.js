@@ -18,7 +18,6 @@ const useLiff = (liffId) => {
 
     useEffect(() => {
         const initializeLiff = async () => {
-            // Check LIFF_MOCK in localStorage เท่านั้น
             let isMock = false;
             try {
                 if (typeof window !== 'undefined') {
@@ -28,7 +27,6 @@ const useLiff = (liffId) => {
             } catch (e) {}
             if (isMock || process.env.NODE_ENV === 'development') {
                 console.warn("LIFF mock mode is active.");
-                // Mock LIFF object with all necessary functions for development
                 const mockLiff = {
                     isInClient: () => true,
                     isLoggedIn: () => true,
@@ -68,11 +66,8 @@ const useLiff = (liffId) => {
                 let redirectPath = params.get('liff.state');
                 console.debug('useLiff: raw liff.state from query =', redirectPath);
 
-                // Normalize redirectPath: handle nested or double-encoded values like
-                // %3Fliff.state%3D%252Fconfirm%252F<id>
                 if (redirectPath) {
                     try {
-                        // decode repeatedly up to 3 times to handle double-encoding
                         let decoded = redirectPath;
                         for (let i = 0; i < 3; i++) {
                             const prev = decoded;
@@ -80,16 +75,12 @@ const useLiff = (liffId) => {
                             if (decoded === prev) break;
                         }
 
-                        // If decoded contains nested liff.state=, extract its value
                         const nestedMatch = decoded.match(/liff\.state=([^&]+)/);
                         if (nestedMatch && nestedMatch[1]) {
                             try { decoded = decodeURIComponent(nestedMatch[1]); } catch (e) {}
                         }
 
-                        // Trim whitespace and strip query string if present
                         decoded = decoded.split('?')[0].trim();
-
-                        // Normalize: if it's an id-like token (no slashes), assume it's a booking id and build /confirm/<id>
                         let targetPath = decoded;
                         if (!targetPath.startsWith('/')) {
                             targetPath = '/' + targetPath;
@@ -97,9 +88,7 @@ const useLiff = (liffId) => {
 
                         const currentPath = window.location.pathname || '/';
 
-                        // If the decoded path is just '/confirm' (no id) and we're already on /confirm, do nothing
                         if (targetPath === '/confirm' && currentPath === '/confirm') {
-                            // remove liff.state from query to clean URL without navigation
                             const sp = new URLSearchParams(window.location.search);
                             sp.delete('liff.state');
                             const qs = sp.toString();
@@ -108,22 +97,16 @@ const useLiff = (liffId) => {
                             return;
                         }
 
-                        // If the target looks like '/<id>' (single segment) or '/confirm/<id>' then navigate to /confirm/<id>
                         const segments = targetPath.split('/').filter(Boolean);
                         if (segments.length === 1) {
-                            // single segment, assume booking id
                             targetPath = `/confirm/${segments[0]}`;
                         } else if (segments.length >= 2 && segments[0] !== 'confirm') {
-                            // multi-segment but not starting with confirm: don't redirect to external path
-                            // guard: only allow /confirm/... to navigate
                             console.warn('liff.state contains path outside /confirm, ignoring:', targetPath);
                             return;
                         }
 
-                        // Prevent open redirect: only navigate to internal /confirm paths
                         if (!targetPath.startsWith('/confirm')) return;
 
-                        // If already at target, just clean query
                         if (currentPath === targetPath) {
                             const sp2 = new URLSearchParams(window.location.search);
                             sp2.delete('liff.state');
@@ -133,7 +116,6 @@ const useLiff = (liffId) => {
                             return;
                         }
 
-                        // Finally navigate to the target path
                         window.location.replace(targetPath);
                         return;
                     } catch (e) {
@@ -156,26 +138,12 @@ const useLiff = (liffId) => {
             } catch (err) {
                 console.error("LIFF initialization failed", err);
                 
-                // Set a more user-friendly error message
-                let userError = 'การเชื่อมต่อ LINE ไม่สมบูรณ์';
-                if (err.message && err.message.includes('permission')) {
-                    userError = 'สิทธิ์การเข้าถึง LINE ไม่เพียงพอ กรุณาอนุญาตสิทธิ์ในการส่งข้อความ';
-                } else if (err.message && err.message.includes('scope')) {
-                    userError = 'การตั้งค่า LIFF ไม่ถูกต้อง กรุณาติดต่อผู้ดูแลระบบ';
-                }
+                // --- ส่วนที่แก้ไข ---
+                // แสดง Error ที่ละเอียดขึ้นบนหน้าจอเพื่อการดีบัก
+                const detailedError = `การเชื่อมต่อ LINE ไม่สมบูรณ์: ${err.message || 'Unknown error'}`;
+                setError(detailedError);
+                // --- จบส่วนที่แก้ไข ---
                 
-                setError(userError);
-                
-                // Provide mock data only if LIFF_MOCK is set
-                if (isMock) {
-                    console.warn('Setting up fallback mock data for LIFF_MOCK');
-                    setLiffObject({
-                        isInClient: () => false,
-                        closeWindow: () => window.history.back(),
-                        sendMessages: async () => console.log('Mock: Messages sent (fallback)')
-                    });
-                    setProfile(MOCK_PROFILE);
-                }
             } finally {
                 setLoading(false);
             }
