@@ -31,6 +31,8 @@ const useLiff = (liffId) => {
                 // Mock LIFF object with all necessary functions for development
                 const mockLiff = {
                     isInClient: () => true,
+                    isLoggedIn: () => true,
+                    getIDToken: () => 'MOCK_ID_TOKEN',
                     closeWindow: () => {
                         console.log('Mock: LIFF window closed');
                         window.history.back();

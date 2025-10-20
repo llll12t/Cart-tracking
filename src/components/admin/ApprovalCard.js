@@ -388,12 +388,21 @@ export default function ApprovalCard({ booking }) {
           <button onClick={handleReject} className="px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
             ปฏิเสธ
           </button>
-          <button onClick={() => setShowModal(true)} className="px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">
-            มอบหมาย / อนุมัติ
+          <button onClick={() => {
+            const liffId = process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID || process.env.NEXT_PUBLIC_LIFF_ID;
+            if (liffId) {
+              const liffUrl = `https://liff.line.me/${liffId}?liff.state=/confirm/${booking.id}`;
+              window.open(liffUrl, '_blank');
+            } else {
+              const url = `/confirm/${booking.id}`;
+              window.open(url, '_blank');
+            }
+          }} className="px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">
+            อนุมัติ (ผ่าน LIFF)
           </button>
         </div>
       </div>
-      {showModal && <AssignVehicleModal booking={booking} onClose={() => setShowModal(false)} onAssign={handleApprove} />}
+  {/* AssignVehicleModal intentionally no longer opened from this card; approval now handled via LIFF confirm page */}
     </>
   );
 }

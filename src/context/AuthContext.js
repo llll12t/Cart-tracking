@@ -28,7 +28,7 @@ export const AuthProvider = ({ children }) => {
         uid: 'line:U_TEST_1234567890ABCDEF',
         displayName: 'คุณ ทดสอบ',
         email: 'mockuser@example.com',
-        providerData: [{ uid: 'U_TEST_1234567890ABCDEF' }],
+        providerData: [{ uid: 'U8d286780c70cf7d60a0ff5704dcf2319' }],
       };
       setUser(mockUser);
       // ตรวจสอบ Firestore ว่ามี user ที่ field lineId ตรงกับ mockUser.providerData[0].uid หรือไม่

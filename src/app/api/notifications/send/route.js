@@ -1,18 +1,7 @@
 import { NextResponse } from 'next/server';
 import admin from '@/lib/firebaseAdmin';
 import fetch from 'node-fetch';
-import {
-  bookingCreatedAdmin,
-  bookingApprovalRequestAdmin,
-  bookingApprovedAdmin,
-  vehicleSentAdmin,
-  vehicleReturnedAdmin,
-  bookingCreatedDriver,
-  bookingApprovedDriver,
-  vehicleSentDriver,
-  vehicleReturnedDriver,
-  bookingCreatedEmployee
-} from '@/lib/lineFlexMessages';
+import { sendNotificationsForEvent } from '@/lib/notifications';
 
 const db = admin.firestore();
 const LINE_PUSH_ENDPOINT = 'https://api.line.me/v2/bot/message/push';
@@ -90,75 +79,14 @@ export async function POST(req) {
         console.error('Failed to load notification settings, using defaults', e);
       }
 
-    // Build message templates for roles/events
-    const templates = {
-      admin: {
-        booking_created: bookingCreatedAdmin(b),
-        booking_approval_request: bookingApprovalRequestAdmin(b),
-        booking_approved: bookingApprovedAdmin(b),
-        vehicle_sent: vehicleSentAdmin(b),
-        vehicle_returned: vehicleReturnedAdmin(b)
-      },
-      driver: {
-        booking_created: bookingCreatedDriver(b),
-        booking_approved: bookingApprovedDriver(b),
-        vehicle_sent: vehicleSentDriver(b),
-        vehicle_returned: vehicleReturnedDriver(b)
-      },
-      employee: {
-        booking_created: bookingCreatedEmployee(b),
-        vehicle_returned: vehicleReturnedAdmin(b)
-      }
-    };
-
-    const results = { sent: [], skipped: [], errors: [] };
-
-    // find recipients: admins and employees
-    let usersSnapshot;
+    // Delegate to helper which handles templates, settings and delivery
     try {
-      usersSnapshot = await db.collection('users').where('role', 'in', ['admin', 'employee']).get();
+      const results = await sendNotificationsForEvent(event, booking);
+      return NextResponse.json({ ok: true, results });
     } catch (e) {
-      console.error('Error querying users for notifications', e);
-      return NextResponse.json({ ok: false, error: 'user lookup failed' }, { status: 500 });
+      console.error('Error sending notifications for event', event, e);
+      return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
     }
-
-    // For each user, send only to admin
-    for (const doc of usersSnapshot.docs) {
-      const ud = doc.data();
-      const lineId = ud?.lineId;
-      const role = ud?.role;
-      // Only notify admins/employees here — but consult settings to decide per-role/event
-      if (!['admin', 'employee'].includes(role)) continue;
-      // check settings for this role and event
-      const roleSettings = (notifSettings.roles && notifSettings.roles[role]) || {};
-      const enabled = typeof roleSettings[event] === 'boolean' ? roleSettings[event] : true;
-      if (!enabled) {
-        results.skipped.push({ uid: doc.id, reason: 'setting_disabled' });
-        continue;
-      }
-      if (!lineId) {
-        results.skipped.push({ uid: doc.id, reason: 'no_lineId' });
-        continue;
-      }
-  const msgToSend = templates[role] ? templates[role][event] : null;
-      if (!msgToSend) {
-        results.skipped.push({ uid: doc.id, reason: 'no_message' });
-        continue;
-      }
-      try {
-        // Always send as Flex Message
-        const messages = [{ type: 'flex', altText: msgToSend.altText || '', contents: msgToSend.contents }];
-        await sendPushMessage(lineId, messages);
-        results.sent.push({ uid: doc.id, lineId });
-      } catch (err) {
-        console.error('Error sending push message to', lineId, err);
-        results.errors.push({ uid: doc.id, lineId, error: String(err) });
-      }
-    }
-
-    // (งด notify requester โดยตรง)
-
-    return NextResponse.json({ ok: true, results });
   } catch (err) {
     console.error('POST /api/notifications/send error', err);
     return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });

@@ -110,25 +110,37 @@ export default function BookingForm() {
       setEndDate(new Date().toISOString().slice(0, 10));
       setIsLoading(false);
 
-      // Trigger LINE notification (fire-and-forget). Backend will handle missing token gracefully.
+      // Trigger LINE notification (fire-and-forget) only if settings allow
       try {
-        const notifyPayload = {
-          event: 'booking_created',
-          booking: {
-            id: bookingId,
-            requesterName: bookingData.requesterName,
-            userEmail: bookingData.userEmail,
-            vehicleLicensePlate: bookingData.vehicleLicensePlate,
-            startDate: bookingData.startDate instanceof Date ? bookingData.startDate.toISOString() : new Date(bookingData.startDate).toISOString(),
-            endDate: bookingData.endDate instanceof Date ? bookingData.endDate.toISOString() : new Date(bookingData.endDate).toISOString()
-          }
-        };
-        // don't await; let backend process and log any error locally
-        fetch('/api/notifications/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(notifyPayload)
-        }).catch((e) => console.warn('notify send error', e));
+        const settingsRes = await fetch('/api/notifications/settings');
+        const settings = await settingsRes.json().catch(() => ({}));
+        const roles = settings.roles || {};
+        // if any role has booking_created enabled, proceed
+        const anyEnabled = ['admin', 'driver', 'employee'].some(r => {
+          const roleSettings = roles[r] || {};
+          return typeof roleSettings['booking_created'] === 'boolean' ? roleSettings['booking_created'] : true;
+        });
+        if (anyEnabled) {
+          const notifyPayload = {
+            event: 'booking_created',
+            booking: {
+              id: bookingId,
+              requesterName: bookingData.requesterName,
+              userEmail: bookingData.userEmail,
+              vehicleLicensePlate: bookingData.vehicleLicensePlate,
+              startDate: bookingData.startDate instanceof Date ? bookingData.startDate.toISOString() : new Date(bookingData.startDate).toISOString(),
+              endDate: bookingData.endDate instanceof Date ? bookingData.endDate.toISOString() : new Date(bookingData.endDate).toISOString()
+            }
+          };
+          // fire-and-forget
+          fetch('/api/notifications/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(notifyPayload)
+          }).catch((e) => console.warn('notify send error', e));
+        } else {
+          console.debug('Notification for booking_created disabled in settings — skipping send');
+        }
       } catch (e) {
         console.warn('notify prepare error', e);
       }

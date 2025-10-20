@@ -1,9 +1,27 @@
 // src/lib/lineFlexMessages.js
 
 function fmtDate(d) {
+  if (!d && d !== 0) return '-';
   try {
-    const dt = new Date(d);
-    return dt.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
+    let dt;
+    // Firestore Timestamp-like object with toDate()
+    if (d && typeof d.toDate === 'function') {
+      dt = d.toDate();
+    // Firestore plain object with seconds/nanoseconds
+    } else if (d && typeof d.seconds === 'number') {
+      const ms = (d.seconds * 1000) + Math.floor((d.nanoseconds || 0) / 1e6);
+      dt = new Date(ms);
+    // numeric timestamp (seconds or milliseconds) or ISO string
+    } else if (typeof d === 'number') {
+      // Heuristic: if it's seconds (10 digits), convert to ms
+      dt = d > 1e12 ? new Date(d) : new Date(d * 1000);
+    } else {
+      dt = new Date(d);
+    }
+
+  if (isNaN(dt.getTime())) return String(d);
+  // Show date only (Thai medium format), no time
+  return dt.toLocaleDateString('th-TH', { dateStyle: 'medium' });
   } catch (e) {
     return String(d);
   }
@@ -167,4 +185,23 @@ export function bookingCreatedEmployee(booking) {
     `วันที่: ${fmtDate(booking.startDate)} → ${fmtDate(booking.endDate)}`
   ];
   return { altText: `มีการขอจองรถจาก ${booking.requesterName || ''}`, contents: baseBubble(title, fields) };
+}
+
+export function bookingRejectedAdmin(booking) {
+  const title = 'คำขอถูกปฏิเสธ';
+  const fields = [
+    `คำขอโดย: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
+    `รถ: ${booking.vehicleLicensePlate || '-'}`,
+    `วันที่: ${fmtDate(booking.startDate)} → ${fmtDate(booking.endDate)}`
+  ];
+  return { altText: `คำขอ ${booking.id || ''} ถูกปฏิเสธ`, contents: baseBubble(title, fields) };
+}
+
+export function bookingRejectedDriver(booking) {
+  const title = 'คำขอของคุณถูกปฏิเสธ';
+  const fields = [
+    `รถ: ${booking.vehicleLicensePlate || '-'}`,
+    `วันที่: ${fmtDate(booking.startDate)} → ${fmtDate(booking.endDate)}`
+  ];
+  return { altText: `คำขอของคุณถูกปฏิเสธ`, contents: baseBubble(title, fields) };
 }
