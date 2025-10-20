@@ -1,22 +1,5 @@
 import { NextResponse } from 'next/server';
-import admin from 'firebase-admin';
-
-// ตรวจสอบให้แน่ใจว่าคุณได้ดาวน์โหลดไฟล์ serviceAccountKey.json
-// จาก Firebase Console > Project Settings > Service Accounts
-// และวางไว้ที่ root ของโปรเจกต์
-// **สำคัญ: อย่าลืมเพิ่มไฟล์นี้ใน .gitignore เพื่อความปลอดภัย**
-try {
-  const serviceAccount = require('../../../../serviceAccountKey.json');
-
-  // Initialize Firebase Admin SDK (ถ้ายังไม่ได้ทำ)
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-  }
-} catch (error) {
-  console.error('Service Account Key not found or invalid. Please check your serviceAccountKey.json file.', error);
-}
+import admin from '@/lib/firebaseAdmin';
 
 
 export async function POST(request) {
