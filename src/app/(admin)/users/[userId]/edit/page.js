@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useRouter, useParams } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -121,7 +122,7 @@ export default function EditUserPage() {
 				<div className="flex flex-col items-center gap-4 md:items-center md:justify-start">
 					<label className="block mb-1 text-sm font-medium">รูปโปรไฟล์</label>
 					{form.imageUrl ? (
-						<img src={form.imageUrl} alt="User" className="w-32 h-32 object-cover rounded-full border" />
+						<Image src={form.imageUrl} alt="User" width={128} height={128} className="w-32 h-32 object-cover rounded-full border" />
 					) : (
 						<div className="w-32 h-32 bg-gray-200 flex items-center justify-center rounded-full border text-gray-400 text-xs">ไม่มีรูป</div>
 					)}
