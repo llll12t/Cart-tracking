@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
+import Image from 'next/image';
 export default function AdminHeader({ onMenuClick }) {
   const { userProfile, logout } = useAuth();
 
@@ -25,7 +26,7 @@ export default function AdminHeader({ onMenuClick }) {
         <p className="text-sm text-gray-600">{userProfile?.name || 'ไม่ระบุชื่อ'}</p>
 
         {userProfile?.imageUrl ? (
-          <img src={userProfile.imageUrl} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
+          <Image src={userProfile.imageUrl} alt="avatar" width={40} height={40} className="rounded-full object-cover" unoptimized />
         ) : (
           <div className="w-10 h-10 rounded-full bg-teal-600 text-white flex items-center justify-center font-semibold">{userProfile?.name?.charAt(0) || 'U'}</div>
         )}

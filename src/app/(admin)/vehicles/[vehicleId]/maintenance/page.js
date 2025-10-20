@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy, updateDoc, serverTimestamp } from 'firebase/firestore';
 import AddMaintenanceForm from '@/components/admin/AddMaintenanceForm';
 import { useCallback } from 'react';
+import Image from 'next/image';
 
 function MaintenanceRecord({ record }) {
     const formatDate = (value) => {
@@ -124,7 +125,7 @@ export default function MaintenancePage() {
                 <div className="flex justify-between items-center mb-8">
                     <div className="flex items-center space-x-4">
                         {vehicle.imageUrl && (
-                            <img src={vehicle.imageUrl} alt={`${vehicle.brand} ${vehicle.model}`} className="w-24 h-16 object-cover rounded-md shadow" />
+                            <Image src={vehicle.imageUrl} alt={`${vehicle.brand} ${vehicle.model}`} width={96} height={64} className="object-cover rounded-md shadow" unoptimized />
                         )}
                         <div>
                             <h1 className="text-3xl font-bold">ประวัติการซ่อมบำรุง</h1>

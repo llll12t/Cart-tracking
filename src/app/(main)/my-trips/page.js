@@ -28,7 +28,7 @@ function TripCard({ trip }) {
             }
         });
         return unsubscribe;
-    }, [trip.vehicleId]);
+    }, [trip.vehicleId, startMileage]);
 
     useEffect(() => {
         const q = query(collection(db, "expenses"), where("bookingId", "==", trip.id));
@@ -279,7 +279,7 @@ export default function MyTripsPage() {
         });
 
         return () => unsubscribe();
-    }, [user, userProfile]);
+    }, [user, userProfile, setTrips]);
 
     if (loading) return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">

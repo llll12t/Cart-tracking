@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Image from 'next/image';
 
 export default function MainHeader({ userProfile, activeTab, setActiveTab }) {
   const router = useRouter();
@@ -22,12 +23,13 @@ export default function MainHeader({ userProfile, activeTab, setActiveTab }) {
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full overflow-hidden border">
             {userProfile?.imageUrl || userProfile?.photoURL ? (
-              // prefer provided image (client-side URL or provider photoURL)
-              // keep simple <img> to avoid adding next/image config
-              <img
+              <Image
                 src={userProfile.imageUrl || userProfile.photoURL}
                 alt={userProfile?.name || 'user'}
+                width={56}
+                height={56}
                 className="w-full h-full object-cover"
+                unoptimized
               />
             ) : (
               <div className="bg-teal-800 w-full h-full flex items-center justify-center text-white font-semibold text-xl">

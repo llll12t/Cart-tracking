@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import Link from 'next/link';
 import AddFuelLogForm from '@/components/admin/AddFuelLogForm';
+import Image from 'next/image';
 
 function FuelRecord({ record }) {
     const formatDate = (timestamp) => new Date(timestamp.seconds * 1000).toLocaleDateString('th-TH');
@@ -63,7 +64,7 @@ export default function FuelPage() {
                 <div className="flex justify-between items-center mb-8">
                     <div className="flex items-center space-x-4">
                         {vehicle.imageUrl && (
-                            <img src={vehicle.imageUrl} alt={`${vehicle.brand} ${vehicle.model}`} className="w-24 h-16 object-cover rounded-md shadow" />
+                            <Image src={vehicle.imageUrl} alt={`${vehicle.brand} ${vehicle.model}`} width={96} height={64} className="object-cover rounded-md shadow" unoptimized />
                         )}
                         <div>
                             <h1 className="text-3xl font-bold">ประวัติการเติมน้ำมัน</h1>

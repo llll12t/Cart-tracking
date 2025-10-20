@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function VehicleGaragePage() {
   const params = useParams();
@@ -58,12 +59,15 @@ export default function VehicleGaragePage() {
         <h1 className="text-2xl font-bold">บันทึกส่งซ่อมของรถ</h1>
         {vehicle && (
           <div className="flex items-center gap-3 text-sm text-gray-600">
-            <div className="w-16 h-16 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">
+              <div className="w-16 h-16 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">
               {(vehicle.imageUrl || vehicle.photoURL || vehicle.image) ? (
-                <img
+                <Image
                   src={vehicle.imageUrl || vehicle.photoURL || vehicle.image}
                   alt={`${vehicle.brand || ''} ${vehicle.model || ''}`}
-                  className="w-full h-full object-cover"
+                  width={64}
+                  height={64}
+                  className="object-cover"
+                  unoptimized
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-2xl">🚗</div>

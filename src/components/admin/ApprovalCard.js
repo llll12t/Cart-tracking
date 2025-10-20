@@ -270,7 +270,7 @@ export default function ApprovalCard({ booking }) {
     }
     fetchRequester();
     return () => { mounted = false; };
-  }, [booking.userId, requesterNameState]);
+  }, [booking.userId, booking.userEmail, requesterNameState]);
 
   const handleApprove = async (vehicle, driver) => {
     try {
