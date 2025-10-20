@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy, updateDoc, serverTimestamp } from 'firebase/firestore';
-import Link from 'next/link';
 import AddMaintenanceForm from '@/components/admin/AddMaintenanceForm';
 import { useCallback } from 'react';
 
@@ -121,10 +120,6 @@ export default function MaintenancePage() {
 
     return (
         <div>
-            <Link href="/vehicles" className="text-indigo-600 hover:text-indigo-800 mb-4 inline-block">
-                &larr; กลับไปหน้ารายการรถทั้งหมด
-            </Link>
-            
             {vehicle && (
                 <div className="flex justify-between items-center mb-8">
                     <div className="flex items-center space-x-4">

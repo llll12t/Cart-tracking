@@ -24,10 +24,10 @@ export default function AdminLayout({ children }) {
     <div className="flex">
       <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="flex-1 min-h-screen flex flex-col bg-gray-100">
-        <div className="p-4 md:p-8">
+        <div className="px-4 py-2 md:p-6 md:py-2 bg-white shadow-sm">
           <AdminHeader onMenuClick={() => setSidebarOpen(true)} />
         </div>
-        <div className="p-4 md:p-8 flex-1 overflow-y-auto">
+        <div className="p-4 md:p-6 flex-1 overflow-y-auto">
           {children}
         </div>
       </main>

@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 
 const MOCK_PROFILE = {
-    userId: 'U_TEST_1234567890ABCDEF',
+    userId: 'U8d286780c70cf7d60a0ff5704dcf2319',
     displayName: 'คุณ ทดสอบ',
     pictureUrl: 'https://lh5.googleusercontent.com/d/10mcLZP15XqebnVb1IaODQLhZ93EWT7h7'
 };
@@ -18,7 +18,15 @@ const useLiff = (liffId) => {
 
     useEffect(() => {
         const initializeLiff = async () => {
-            if (process.env.NODE_ENV === 'development') {
+            // Check LIFF_MOCK in localStorage เท่านั้น
+            let isMock = false;
+            try {
+                if (typeof window !== 'undefined') {
+                    const mockFlag = window.localStorage.getItem('LIFF_MOCK');
+                    isMock = mockFlag === '1' || mockFlag === 'true';
+                }
+            } catch (e) {}
+            if (isMock || process.env.NODE_ENV === 'development') {
                 console.warn("LIFF mock mode is active.");
                 // Mock LIFF object with all necessary functions for development
                 const mockLiff = {
@@ -87,9 +95,9 @@ const useLiff = (liffId) => {
                 
                 setError(userError);
                 
-                // In development, still provide mock data to allow testing
-                if (process.env.NODE_ENV === 'development') {
-                    console.warn('Setting up fallback mock data for development');
+                // Provide mock data only if LIFF_MOCK is set
+                if (isMock) {
+                    console.warn('Setting up fallback mock data for LIFF_MOCK');
                     setLiffObject({
                         isInClient: () => false,
                         closeWindow: () => window.history.back(),

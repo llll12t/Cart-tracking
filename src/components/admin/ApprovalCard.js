@@ -116,7 +116,7 @@ function AssignVehicleModal({ booking, onClose, onAssign }) {
                     <div
                       key={v.id}
                       onClick={() => setSelectedVehicleId(v.id)}
-                      className={`flex items-center gap-3 p-3 border rounded-md cursor-pointer transition ${selectedVehicleId === v.id ? 'border-blue-600 shadow-sm' : 'border-gray-200 hover:shadow-sm'}`}
+                      className={`flex items-center gap-3 p-3 shadow-sm rounded-md cursor-pointer transition ${selectedVehicleId === v.id ? 'border-blue-600' : 'border-gray-200 hover:shadow-md'}`}
                     >
                       {/* vehicle image */}
                       {v.imageUrl ? (
@@ -228,15 +228,15 @@ export default function ApprovalCard({ booking }) {
   const [showModal, setShowModal] = useState(false);
   const [requesterNameState, setRequesterNameState] = useState(booking.requesterName || '');
 
-  const formatDate = (value) => {
+  // แสดงเฉพาะวันที่ (ไม่รวมเวลา)
+  const formatDateOnly = (value) => {
     if (!value) return '-';
     try {
-      // Firestore Timestamp
-      if (value.seconds) return new Date(value.seconds * 1000).toLocaleString('th-TH');
-      // JS Date
-      if (value.toDate) return new Date(value.toDate()).toLocaleString('th-TH');
-      const d = value instanceof Date ? value : new Date(value);
-      return isNaN(d.getTime()) ? '-' : d.toLocaleString('th-TH');
+      let d;
+      if (value.seconds) d = new Date(value.seconds * 1000);
+      else if (value.toDate) d = new Date(value.toDate());
+      else d = value instanceof Date ? value : new Date(value);
+      return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('th-TH');
     } catch (e) {
       return '-';
     }
@@ -304,21 +304,35 @@ export default function ApprovalCard({ booking }) {
 
   const handleReject = async () => {
     if (window.confirm("คุณต้องการปฏิเสธคำขอนี้ใช่หรือไม่?")) {
-        try {
-            const bookingRef = doc(db, "bookings", booking.id);
-            await updateDoc(bookingRef, {
-                status: "rejected",
-            });
-        } catch (error) {
-            console.error("Error rejecting booking: ", error);
-            alert("Failed to reject booking.");
-        }
+      try {
+        const bookingRef = doc(db, "bookings", booking.id);
+        await updateDoc(bookingRef, {
+          status: "rejected",
+        });
+      } catch (error) {
+        console.error("Error rejecting booking: ", error);
+        alert("Failed to reject booking.");
+      }
+    }
+  };
+
+  // ลบคำขอ
+  const handleDelete = async () => {
+    if (window.confirm("⚠️ การลบนี้จะลบคำขอออกจากระบบถาวรและไม่สามารถกู้คืนได้\n\nคุณต้องการลบคำขอนี้จริงหรือไม่?")) {
+      try {
+        const bookingRef = doc(db, "bookings", booking.id);
+        await (await import("firebase/firestore")).deleteDoc(bookingRef);
+        alert("ลบคำขอเรียบร้อยแล้ว");
+      } catch (error) {
+        console.error("Error deleting booking: ", error);
+        alert("Failed to delete booking.");
+      }
     }
   };
 
   return (
     <>
-      <div className="bg-white p-5 rounded-lg shadow-sm border hover:shadow-md transition">
+      <div className="bg-white p-5 rounded-lg shadow-sm  hover:shadow-md transition">
         <div className="flex items-start gap-4">
           <div className="flex-1">
             <div className="flex items-center justify-between">
@@ -342,14 +356,12 @@ export default function ApprovalCard({ booking }) {
               <div><strong>ต้นทาง:</strong> {booking.origin || '-'}</div>
               <div><strong>ปลายทาง:</strong> {booking.destination || '-'}</div>
               <div>
-                <strong>วันที่เดินทาง:</strong>{' '}
-                {/* support startDate / startDateTime (Timestamp or Date) */}
-                { (booking.startDate || booking.startDateTime) ? (
-                  <>
-                    {formatDate(booking.startDate || booking.startDateTime)}
-                    { (booking.endDate || booking.endDateTime) ? ` — ${formatDate(booking.endDate || booking.endDateTime)}` : '' }
-                  </>
-                ) : '-'}
+                <strong>วันที่เริ่มต้น:</strong>{' '}
+                {booking.startDate || booking.startDateTime ? formatDateOnly(booking.startDate || booking.startDateTime) : '-'}
+              </div>
+              <div>
+                <strong>วันที่สิ้นสุด:</strong>{' '}
+                {booking.endDate || booking.endDateTime ? formatDateOnly(booking.endDate || booking.endDateTime) : '-'}
               </div>
               {/* จำนวนผู้โดยสาร และ ประเภทรถที่ต้องการ ถูกเอาออกตามคำขอ */}
               <div><strong>รถที่เลือก/ทะเบียน:</strong> {booking.vehicleLicensePlate || booking.vehicleId || '-'}</div>
@@ -370,6 +382,9 @@ export default function ApprovalCard({ booking }) {
         </div>
 
         <div className="mt-4 pt-4 border-t flex justify-end gap-3">
+          <button onClick={handleDelete} className="px-3 py-2 text-sm font-medium text-white bg-gray-500 rounded-md hover:bg-gray-700">
+            ลบคำขอ
+          </button>
           <button onClick={handleReject} className="px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
             ปฏิเสธ
           </button>

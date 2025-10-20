@@ -44,27 +44,31 @@ function VehicleList({ vehicles }) {
   }
 
   return (
-    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
       {vehicles.map((vehicle) => (
-        <div key={vehicle.id} className="bg-white rounded-xl shadow-md p-4 flex flex-col">
-          <div className="flex gap-4 items-center">
+        <div key={vehicle.id} className="bg-white rounded-2xl shadow-lg p-6 flex flex-col min-h-[320px] justify-between">
+          <div className="flex gap-6 items-center mb-4 relative">
+            {/* Status badge overlay on image */}
+            <div className="absolute left-0 top-0 z-10">
+              <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusClass(vehicle.status)}`}>
+                {getStatusLabel(vehicle.status)}
+              </span>
+            </div>
             {vehicle.imageUrl ? (
-              <Image src={vehicle.imageUrl} alt={`${vehicle.brand} ${vehicle.model}`} width={96} height={64} className="object-cover rounded-lg border" unoptimized />
+              <Image src={vehicle.imageUrl} alt={`${vehicle.brand} ${vehicle.model}`} width={120} height={80} className="object-cover rounded-xl border" unoptimized />
             ) : (
-              <div className="w-24 h-16 bg-gray-200 flex items-center justify-center text-xs text-gray-500 rounded-lg border">ไม่มีรูป</div>
+              <div className="w-28 h-20 bg-gray-200 flex items-center justify-center text-xs text-gray-500 rounded-xl border">ไม่มีรูป</div>
             )}
             <div className="flex-1">
-              <div className="font-bold text-lg">{vehicle.brand} {vehicle.model} <span className="text-sm text-gray-500">{vehicle.year}</span></div>
-              <div className="mt-1 grid grid-cols-2 gap-2 text-sm text-gray-600">
+              <div className="font-bold text-lg mb-1">{vehicle.brand} {vehicle.model} <span className="text-sm text-gray-500">{vehicle.year}</span></div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-600 mb-2">
                 <div>ทะเบียน: <span className="font-semibold">{vehicle.licensePlate}</span></div>
                 <div>สี: <span className="font-semibold">{vehicle.color || '-'}</span></div>
                 <div>ประเภท: <span className="font-semibold">{vehicle.type}</span></div>
                 <div>ไมล์: <span className="font-semibold">{vehicle.currentMileage ?? '-'}</span></div>
                 {(() => {
-                  // Decide whether there is a meaningful depreciation to show
                   let show = false;
                   let display = '';
-
                   if (vehicle.depreciationRate !== undefined && vehicle.depreciationRate !== null && vehicle.depreciationRate !== '') {
                     const r = Number(vehicle.depreciationRate) || 0;
                     if (r > 0) {
@@ -72,14 +76,12 @@ function VehicleList({ vehicles }) {
                       display = `${r.toLocaleString('th-TH')} บ./กม.`;
                     }
                   }
-
                   if (!show) {
                     const purchasePrice = vehicle.purchasePrice ? Number(vehicle.purchasePrice) : null;
                     const salvage = vehicle.salvageValue ? Number(vehicle.salvageValue) : 0;
                     const expectedKm = vehicle.expectedLifetimeKm ? Number(vehicle.expectedLifetimeKm) : null;
                     const initialMileage = vehicle.initialMileage ? Number(vehicle.initialMileage) : 0;
                     const currentMileage = vehicle.currentMileage != null ? Number(vehicle.currentMileage) : null;
-
                     if (purchasePrice && expectedKm && expectedKm > 0) {
                       const rate = (purchasePrice - salvage) / expectedKm;
                       if (rate > 0) {
@@ -93,7 +95,6 @@ function VehicleList({ vehicles }) {
                       }
                     }
                   }
-
                   if (!show) return null;
                   return (
                     <div>
@@ -103,16 +104,13 @@ function VehicleList({ vehicles }) {
                 })()}
               </div>
               {vehicle.note && <p className="mt-2 text-sm text-gray-500 truncate">หมายเหตุ: {vehicle.note}</p>}
-              <div className="mt-2 text-xs text-gray-500">
+              <div className="mt-2 text-xs text-gray-500 space-y-1">
                 <div>ภาษีหมดอายุ: {vehicle.taxDueDate ? (new Date(vehicle.taxDueDate.seconds * 1000).toLocaleDateString('th-TH')) : '-'}</div>
                 <div>ประกันหมดอายุ: {vehicle.insuranceExpireDate ? (new Date(vehicle.insuranceExpireDate.seconds * 1000).toLocaleDateString('th-TH')) : '-'}</div>
               </div>
             </div>
           </div>
-          <div className="flex justify-between items-center mt-4">
-            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusClass(vehicle.status)}`}>
-              {getStatusLabel(vehicle.status)}
-            </span>
+          <div className="flex justify-end items-center mt-2 pt-2 border-t border-gray-100">
             <div className="flex gap-2">
               <Link
                 href={`/vehicles/${vehicle.id}/edit`}
@@ -124,19 +122,19 @@ function VehicleList({ vehicles }) {
                 href={`/vehicles/${vehicle.id}/maintenance`}
                 className="px-3 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200"
               >
-                บันทึกค่าใช้จ่าย
+                ค่าใช้จ่าย
               </Link>
               <Link
                 href={`/vehicles/${vehicle.id}/garage`}
                 className="px-3 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
               >
-                บันทึกส่งซ่อม
+                ส่งซ่อม
               </Link>
               <Link
                 href={`/vehicles/${vehicle.id}/fuel`}
                 className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
               >
-                ประวัติน้ำมัน
+                น้ำมัน
               </Link>
             </div>
           </div>
@@ -226,8 +224,7 @@ export default function VehiclesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">จัดการรถในระบบ</h1>
+      <div className="flex items-center  mb-6">
         <button
           onClick={() => setShowForm(true)}
           className="px-4 py-2 font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700"

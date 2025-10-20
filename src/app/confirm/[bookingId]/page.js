@@ -1,3 +1,5 @@
+// src/app/confirm/[bookingId]/page.js
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -8,63 +10,103 @@ export default function ConfirmBookingPage() {
   const router = useRouter();
   const params = useParams();
   const bookingId = params?.bookingId;
-  const { liff, profile, loading: liffLoading, error: liffError } = useLiff();
+  const { liff, profile, loading: liffLoading, error: liffError } = useLiff(process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID);
   const [booking, setBooking] = useState(null);
   const [message, setMessage] = useState('');
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     async function load() {
       if (!bookingId) return;
-      const res = await fetch(`/api/bookings/${bookingId}`);
-      if (res.ok) setBooking(await res.json());
+      try {
+        const res = await fetch(`/api/bookings/${bookingId}`);
+        if (res.ok) {
+          setBooking(await res.json());
+        } else {
+          setBooking(null);
+        }
+      } catch (e) {
+        setBooking(null);
+      }
     }
     load();
   }, [bookingId]);
 
-  const handleConfirm = async () => {
-    setMessage('กำลังยืนยัน...');
+  const handleAction = async (action) => {
+    setProcessing(true);
+    setMessage(`กำลัง${action === 'approve' ? 'อนุมัติ' : 'ปฏิเสธ'}...`);
     try {
-      // ensure LIFF is ready
       if (!liff) {
         setMessage('LIFF ไม่พร้อม กรุณาเปิดหน้าในแอป LINE');
+        setProcessing(false);
         return;
       }
-      if (!profile) {
-        await liff.login();
+      if (typeof liff.isLoggedIn !== 'function' || !liff.isLoggedIn()) {
+        setMessage('LIFF ยังไม่พร้อมหรือไม่ได้เปิดในแอป LINE');
+        setProcessing(false);
+        return;
       }
-      const idToken = await liff.getIDToken();
-      const res = await fetch(`/api/bookings/${bookingId}/approve`, {
+      const idToken = typeof liff.getIDToken === 'function' ? liff.getIDToken() : null;
+      if (!idToken) {
+        setMessage('ไม่พบ idToken จาก LIFF');
+        setProcessing(false);
+        return;
+      }
+      const res = await fetch(`/api/bookings/${bookingId}/${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken })
       });
       const data = await res.json();
       if (res.ok && data.ok) {
-        setMessage('ยืนยันเรียบร้อย');
-        setTimeout(() => router.push('/users'), 1000);
+        setMessage(`${action === 'approve' ? 'อนุมัติ' : 'ปฏิเสธ'}เรียบร้อย`);
+        setTimeout(() => liff.closeWindow && liff.closeWindow(), 1500);
       } else {
-        setMessage('ไม่สามารถยืนยันได้: ' + (data.error || ''));
+        setMessage(`ไม่สามารถดำเนินการได้: ${data.error || ''}`);
       }
     } catch (err) {
       console.error(err);
-      setMessage('เกิดข้อผิดพลาดในการยืนยัน');
+      setMessage('เกิดข้อผิดพลาดในการดำเนินการ');
     }
+    setProcessing(false);
   };
+
+  if (liffLoading) return <div>กำลังโหลด...</div>;
+  if (liffError) return <div>เกิดข้อผิดพลาดในการโหลด LIFF: {liffError}</div>
 
   return (
     <div className="p-8 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">ยืนยันการอนุมัติการจอง</h1>
-      {!booking ? <div>กำลังโหลด...</div> : (
-        <div className="bg-white p-6 rounded shadow">
-          <div className="mb-2"><strong>ผู้ขอ:</strong> {booking.requesterName}</div>
-          <div className="mb-2"><strong>รถ:</strong> {booking.vehicleLicensePlate}</div>
-          <div className="mb-2"><strong>วันที่:</strong> {new Date(booking.startDate).toLocaleString()}</div>
-          <div className="mt-4">
-            <button onClick={handleConfirm} className="px-4 py-2 bg-teal-600 text-white rounded">ยืนยัน</button>
+      <h1 className="text-2xl font-bold mb-4">รายละเอียดการจอง</h1>
+      <div className="bg-white p-6 rounded shadow">
+        {booking ? (
+          <div className="space-y-2 mb-6">
+            <div><span className="font-semibold">ผู้ขอ:</span> {booking.requesterName} ({booking.userEmail})</div>
+            <div><span className="font-semibold">รถ:</span> {booking.vehicleLicensePlate}</div>
+            <div><span className="font-semibold">วันที่:</span> {booking.startDate && booking.endDate ? `${new Date(booking.startDate).toLocaleString('th-TH', { dateStyle: 'medium' })} - ${new Date(booking.endDate).toLocaleString('th-TH', { dateStyle: 'medium' })}` : '-'}</div>
+            <div><span className="font-semibold">วัตถุประสงค์:</span> {booking.purpose}</div>
+            <div><span className="font-semibold">หมายเหตุ:</span> {booking.notes}</div>
           </div>
-          {message && <p className="mt-3 text-sm">{message}</p>}
+        ) : (
+          <div>กำลังโหลดข้อมูลการจอง...</div>
+        )}
+        <div className="flex gap-4">
+          <button
+            onClick={() => handleAction('approve')}
+            disabled={processing}
+            className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-60"
+          >
+            อนุมัติ
+          </button>
+          <button
+            onClick={() => handleAction('reject')}
+            disabled={processing}
+            className="px-4 py-2 bg-red-600 text-white rounded disabled:opacity-60"
+          >
+            ปฏิเสธ
+          </button>
         </div>
-      )}
+        {message && <p className="mt-3 text-sm">{message}</p>}
+      </div>
     </div>
   );
 }

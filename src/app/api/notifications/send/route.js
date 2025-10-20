@@ -1,15 +1,7 @@
 import { NextResponse } from 'next/server';
 import admin from '@/lib/firebaseAdmin';
 import fetch from 'node-fetch';
-import {
-  bookingCreatedAdmin,
-  bookingCreatedEmployee,
-  bookingApprovalRequest,
-  bookingApprovedDriver,
-  vehicleSentDriver,
-  vehicleReturnedAdmin,
-  vehicleReturnedEmployee
-} from '@/lib/lineFlexMessages';
+import { bookingCreatedAdmin } from '@/lib/lineFlexMessages';
 
 const db = admin.firestore();
 const LINE_PUSH_ENDPOINT = 'https://api.line.me/v2/bot/message/push';
@@ -30,8 +22,28 @@ function normalizeBooking(b) {
 
 async function sendPushMessage(to, message) {
   if (!ACCESS_TOKEN) throw new Error('LINE channel access token not configured');
-  const payload = Array.isArray(message) ? message : [message];
+  // Ensure message is in correct LINE format (type: 'flex' or 'text')
+  let payload;
+  if (Array.isArray(message)) {
+    payload = message.map(m => {
+      if (m.contents) {
+        return { type: 'flex', altText: m.altText || '', contents: m.contents };
+      } else if (m.text || m.altText) {
+        return { type: 'text', text: m.text || m.altText || '' };
+      } else {
+        return m;
+      }
+    });
+  } else if (message.contents) {
+    payload = [{ type: 'flex', altText: message.altText || '', contents: message.contents }];
+  } else if (message.text || message.altText) {
+    payload = [{ type: 'text', text: message.text || message.altText || '' }];
+  } else {
+    payload = [message];
+  }
   const body = { to, messages: payload };
+  // DEBUG LOG: แสดง payload ที่จะส่งไป LINE API
+  console.error('[LINE_PUSH] payload:', JSON.stringify(body, null, 2));
   const resp = await fetch(LINE_PUSH_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -58,31 +70,16 @@ export async function POST(req) {
 
     const b = normalizeBooking(booking);
 
-    // build messages depending on event
+    // build messages depending on event (admin only)
     let adminMsg = null;
-    let userMsg = null;
     switch (event) {
       case 'booking_created':
-        adminMsg = bookingCreatedAdmin(b);
-        userMsg = bookingCreatedEmployee(b);
-        break;
       case 'booking_approval_request':
-        adminMsg = bookingApprovalRequest(b);
-        break;
       case 'booking_approved':
-        adminMsg = bookingApprovedDriver(b);
-        break;
       case 'vehicle_sent':
-        adminMsg = vehicleSentDriver(b);
-        break;
       case 'vehicle_returned':
-        adminMsg = vehicleReturnedAdmin(b);
-        userMsg = vehicleReturnedEmployee(b);
-        break;
       default:
-        // fallback: try booking created payloads
         adminMsg = bookingCreatedAdmin(b);
-        userMsg = bookingCreatedEmployee(b);
     }
 
     const results = { sent: [], skipped: [], errors: [] };
@@ -96,35 +93,24 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'user lookup failed' }, { status: 500 });
     }
 
-    // For each user, send either adminMsg (admins) or userMsg (employees when matches requester)
+    // For each user, send only to admin
     for (const doc of usersSnapshot.docs) {
       const ud = doc.data();
       const lineId = ud?.lineId;
       const role = ud?.role;
+      if (role !== 'admin') continue;
       if (!lineId) {
         results.skipped.push({ uid: doc.id, reason: 'no_lineId' });
         continue;
       }
-
-      // decide which message to send
-      let msgToSend = null;
-      if (role === 'admin') msgToSend = adminMsg;
-      else if (role === 'employee') {
-        // if the employee is the requester, send user message; otherwise admins cover it
-        if (ud?.email && ud.email === b.userEmail) msgToSend = userMsg || adminMsg;
-        else msgToSend = adminMsg;
-      } else {
-        msgToSend = adminMsg;
-      }
-
+      let msgToSend = adminMsg;
       if (!msgToSend) {
         results.skipped.push({ uid: doc.id, reason: 'no_message' });
         continue;
       }
-
       try {
-        // msgToSend can be { altText, contents } where contents is Flex bubble or array
-        const messages = msgToSend.contents ? (Array.isArray(msgToSend.contents) ? msgToSend.contents : [msgToSend.contents]) : [{ type: 'text', text: msgToSend.altText || String(msgToSend) }];
+        // Always send as Flex Message
+        const messages = [{ type: 'flex', altText: msgToSend.altText || '', contents: msgToSend.contents }];
         await sendPushMessage(lineId, messages);
         results.sent.push({ uid: doc.id, lineId });
       } catch (err) {
@@ -133,27 +119,7 @@ export async function POST(req) {
       }
     }
 
-    // also attempt to notify the requester directly if they have a lineId
-    try {
-      if (b.userEmail) {
-        const q = await db.collection('users').where('email', '==', b.userEmail).limit(1).get();
-        if (!q.empty) {
-          const ud = q.docs[0].data();
-          if (ud?.lineId && userMsg) {
-            try {
-              const messages = userMsg.contents ? (Array.isArray(userMsg.contents) ? userMsg.contents : [userMsg.contents]) : [{ type: 'text', text: userMsg.altText || '' }];
-              await sendPushMessage(ud.lineId, messages);
-              results.sent.push({ requester: q.docs[0].id, lineId: ud.lineId });
-            } catch (err) {
-              results.errors.push({ requester: q.docs[0].id, error: String(err) });
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.error('requester lookup error', err);
-      results.errors.push({ requesterLookupError: String(err) });
-    }
+    // (งด notify requester โดยตรง)
 
     return NextResponse.json({ ok: true, results });
   } catch (err) {

@@ -14,6 +14,41 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check LIFF_MOCK in localStorage or development mode
+    let isMock = false;
+    try {
+      if (typeof window !== 'undefined') {
+        const mockFlag = window.localStorage.getItem('LIFF_MOCK');
+        isMock = mockFlag === '1' || mockFlag === 'true';
+      }
+    } catch (e) {}
+    if (isMock || process.env.NODE_ENV === 'development') {
+      // Mock user for LIFF mock mode (ค้นหาจาก lineId เป็นหลัก)
+      const mockUser = {
+        uid: 'line:U_TEST_1234567890ABCDEF',
+        displayName: 'คุณ ทดสอบ',
+        email: 'mockuser@example.com',
+        providerData: [{ uid: 'U_TEST_1234567890ABCDEF' }],
+      };
+      setUser(mockUser);
+      // ตรวจสอบ Firestore ว่ามี user ที่ field lineId ตรงกับ mockUser.providerData[0].uid หรือไม่
+      (async () => {
+        try {
+          const usersCol = collection(db, 'users');
+          const q = query(usersCol, where('lineId', '==', mockUser.providerData[0].uid));
+          const qSnap = await getDocs(q);
+          if (!qSnap.empty) {
+            setUserProfile(qSnap.docs[0].data());
+          } else {
+            setUserProfile(null);
+          }
+        } catch (e) {
+          setUserProfile(null);
+        }
+        setLoading(false);
+      })();
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, async (user) => { // 4. เปลี่ยนเป็น async function
       if (user) {
         setUser(user);

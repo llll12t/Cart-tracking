@@ -78,7 +78,7 @@ export default function VehicleGaragePage() {
       </div>
 
       <div className="mb-4 flex items-center justify-between">
-        <Link href={`/vehicles/${vehicleId}/maintenance`} className="text-sm text-indigo-600 underline">กลับไปที่บันทึกค่าใช้จ่าย</Link>
+        <Link href={`/maintenance`} className="text-sm text-indigo-600 underline">กลับไปที่บันทึกค่าใช้จ่าย</Link>
         <div className="text-sm">รวมค่าใช้จ่ายทั้งหมด: <span className="font-semibold">{totalCost.toLocaleString('th-TH')} บาท</span></div>
       </div>
 
@@ -100,13 +100,13 @@ export default function VehicleGaragePage() {
                   <div className="mb-2">บันทึกเมื่อ: {rec.createdAt ? (rec.createdAt.seconds ? new Date(rec.createdAt.seconds*1000).toLocaleString('th-TH') : new Date(rec.createdAt).toLocaleString('th-TH')) : '-'}</div>
                   <div className="mb-1">ค่าใช้จ่าย (ประเมิน/จริง): {rec.cost ? `${Number(rec.cost).toLocaleString('th-TH')} บาท` : '-'} / {rec.finalCost ? `${Number(rec.finalCost).toLocaleString('th-TH')} บาท` : '-'}</div>
                   <div className="mb-1">รายการอะไหล่: {rec.partsUsed ?? '-'}</div>
-                  {rec.laborHours !== undefined && rec.laborHours !== null && `${rec.laborHours}` !== '' && (
-                    <div className="mb-1">ชั่วโมงแรงงาน: {rec.laborHours}</div>
-                  )}
                   {rec.invoiceNumber && (
                     <div className="mb-1">เลขที่ใบแจ้งหนี้: {rec.invoiceNumber}</div>
                   )}
                   <div className="mb-1">มีประกัน: {rec.warranty ? 'ใช่' : 'ไม่'}</div>
+                  {rec.warranty && rec.warrantyDate && (
+                    <div className="mb-1">วันที่รับประกัน: {rec.warrantyDate.seconds ? new Date(rec.warrantyDate.seconds*1000).toLocaleDateString('th-TH') : new Date(rec.warrantyDate).toLocaleDateString('th-TH')}</div>
+                  )}
                   {rec.receivedAt && <div className="text-xs text-gray-500">รับคืน: {rec.receivedAt.seconds ? new Date(rec.receivedAt.seconds*1000).toLocaleString('th-TH') : new Date(rec.receivedAt).toLocaleString('th-TH')}</div>}
                 </div>
               </div>

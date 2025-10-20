@@ -7,17 +7,23 @@ import LiffQueryRouter from '@/components/main/LiffQueryRouter';
 
 // Layout หลักสำหรับพนักงาน
 export default function MainLayout({ children }) {
-  const { user, loading } = useAuth();
+  const { user, userProfile, loading } = useAuth();
   const { loading: liffLoading, needsLink, linkProfile, linkByPhone, error: liffAuthError } = useLiffAuth();
   const [phoneInput, setPhoneInput] = useState('');
   const [linking, setLinking] = useState(false);
   const [linkMessage, setLinkMessage] = useState('');
 
+  // Loading state
   if (loading || liffLoading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
 
-  // If LIFF sign-in returned a needsLink, show a small form to enter phone number
+  // ถ้าไม่มี user ให้แสดงข้อความเข้าสู่ระบบ
+  if (!user) {
+    return <div className="flex items-center justify-center min-h-screen text-gray-600">กรุณาเข้าสู่ระบบผ่าน LINE หรือรอสักครู่...</div>;
+  }
+
+  // ถ้าต้องผูกเบอร์โทร (needsLink)
   if (needsLink) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
@@ -42,18 +48,19 @@ export default function MainLayout({ children }) {
           <p className="text-xs text-gray-400 mt-4">ถ้าคุณยังไม่ลงทะเบียนในระบบ โปรดติดต่อผู้ดูแล</p>
         </div>
       </div>
-    )
+    );
   }
 
-  // หากไม่มี user login อยู่ ให้แสดงหน้าว่างๆ (middleware จะจัดการ redirect)
-  if (!user) {
-    return null;
+  // ถ้ามี userProfile แล้ว (login และมี profile ในระบบ)
+  if (userProfile) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <LiffQueryRouter />
+        {children}
+      </div>
+    );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <LiffQueryRouter />
-      {children}
-    </div>
-  );
+  // fallback: กรณี user มีแต่ยังไม่มี profile (และไม่เข้า needsLink)
+  return <div className="flex items-center justify-center min-h-screen text-gray-600">กำลังตรวจสอบข้อมูลผู้ใช้...</div>;
 }

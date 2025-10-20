@@ -14,7 +14,7 @@ export default function AdminMaintenanceQueue() {
   // create form removed from this page
   const [editRecord, setEditRecord] = useState(null);
   const [receiveRecord, setReceiveRecord] = useState(null);
-  const [receiveData, setReceiveData] = useState({ finalCost: '', finalMileage: '', notes: '', partsUsed: '', laborHours: '', invoiceNumber: '', warranty: false });
+  const [receiveData, setReceiveData] = useState({ finalCost: '', finalMileage: '', notes: '', partsUsed: '', invoiceNumber: '', warranty: false, warrantyDate: '' });
   const [showSendModal, setShowSendModal] = useState(false);
   const [vehiclesList, setVehiclesList] = useState([]);
   const [sendVehicleId, setSendVehicleId] = useState('');
@@ -187,9 +187,13 @@ export default function AdminMaintenanceQueue() {
       finalMileage: rec.finalMileage ?? rec.odometerAtDropOff ?? rec.mileage ?? '',
       notes: rec.completionNotes ?? '',
       partsUsed: rec.partsUsed ?? '',
-      laborHours: rec.laborHours ?? '',
       invoiceNumber: rec.invoiceNumber ?? '',
       warranty: rec.warranty ?? false,
+      warrantyDate: rec.warrantyDate
+        ? (rec.warrantyDate.seconds
+            ? new Date(rec.warrantyDate.seconds * 1000).toISOString().split('T')[0]
+            : new Date(rec.warrantyDate).toISOString().split('T')[0])
+        : '',
     });
   };
 
@@ -217,17 +221,22 @@ export default function AdminMaintenanceQueue() {
         }
 
         // update maintenance (add more detailed fields)
-        tx.update(maintRef, {
+        const updateObj = {
           maintenanceStatus: 'completed',
           finalCost: Number(receiveData.finalCost) || 0,
           finalMileage: receiveData.finalMileage ? Number(receiveData.finalMileage) : null,
           completionNotes: receiveData.notes || '',
           partsUsed: receiveData.partsUsed || '',
-          laborHours: receiveData.laborHours ? Number(receiveData.laborHours) : null,
           invoiceNumber: receiveData.invoiceNumber || '',
           warranty: !!receiveData.warranty,
           receivedAt: serverTimestamp(),
-        });
+        };
+        if (receiveData.warranty && receiveData.warrantyDate) {
+          updateObj.warrantyDate = new Date(receiveData.warrantyDate);
+        } else {
+          updateObj.warrantyDate = null;
+        }
+        tx.update(maintRef, updateObj);
 
         // update vehicle
         tx.update(vehicleRef, { status: 'available', currentMileage: newMileage });
@@ -246,12 +255,16 @@ export default function AdminMaintenanceQueue() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">จัดการการซ่อมบำรุง</h1>
-      </div>
-
       <div className="mt-8">
-        <h2 className="text-xl font-semibold mb-3">รถที่ส่งอู่ (กำลังซ่อม)</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xl font-semibold">รถที่ส่งอู่ (กำลังซ่อม)</h2>
+          <button
+            onClick={openSendModal}
+            className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 font-semibold text-sm"
+          >
+            + ส่งรถไปอู่
+          </button>
+        </div>
         {inProgressItems.length === 0 ? (
           <p className="text-gray-500">ไม่มีรถที่ส่งอู่ในขณะนี้</p>
         ) : (
@@ -343,12 +356,14 @@ export default function AdminMaintenanceQueue() {
               <input type="number" className="w-full p-2 border rounded" value={receiveData.finalCost} onChange={(e)=>setReceiveData(d=>({...d, finalCost: e.target.value}))} placeholder="ค่าใช้จ่ายจริง (บาท)" />
               <input type="number" className="w-full p-2 border rounded" value={receiveData.finalMileage} onChange={(e)=>setReceiveData(d=>({...d, finalMileage: e.target.value}))} placeholder="เลขไมล์ตอนรับคืน (กม.)" />
               <input type="text" className="w-full p-2 border rounded" value={receiveData.partsUsed} onChange={(e)=>setReceiveData(d=>({...d, partsUsed: e.target.value}))} placeholder="อะไหล่ที่ใช้ (คั่นด้วย comma)" />
-              <input type="number" step="0.1" className="w-full p-2 border rounded" value={receiveData.laborHours} onChange={(e)=>setReceiveData(d=>({...d, laborHours: e.target.value}))} placeholder="ชั่วโมงแรงงาน" />
               <input type="text" className="w-full p-2 border rounded" value={receiveData.invoiceNumber} onChange={(e)=>setReceiveData(d=>({...d, invoiceNumber: e.target.value}))} placeholder="เลขที่ใบแจ้งหนี้ / ใบเสร็จ" />
               <label className="inline-flex items-center gap-2">
                 <input type="checkbox" checked={!!receiveData.warranty} onChange={(e)=>setReceiveData(d=>({...d, warranty: e.target.checked}))} />
                 <span className="text-sm">รับประกัน (หากมี)</span>
               </label>
+              {receiveData.warranty && (
+                <input type="date" className="w-full p-2 border rounded" value={receiveData.warrantyDate} onChange={(e)=>setReceiveData(d=>({...d, warrantyDate: e.target.value}))} placeholder="วันที่รับประกัน" />
+              )}
               <textarea className="w-full p-2 border rounded" value={receiveData.notes} onChange={(e)=>setReceiveData(d=>({...d, notes: e.target.value}))} placeholder="หมายเหตุ / สรุปงานซ่อม" />
             </div>
             <div className="flex justify-end gap-3 mt-4">

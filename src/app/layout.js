@@ -14,7 +14,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={inter.className}>
-        <AuthProvider> {/* 2. นำไปครอบ children */}
+        <AuthProvider> 
           {children}
         </AuthProvider>
       </body>
