@@ -1,7 +1,7 @@
 // src/app/api/firebase-custom-token/route.js
 
 import { NextResponse } from 'next/server';
-import { auth as adminAuth } from '@/app/lib/firebaseAdmin'; // 1. Import Admin SDK
+import { auth as adminAuth } from '@/lib/firebaseAdmin'; // 1. Import Admin SDK
 import { Client } from '@line/bot-sdk'; // 2. Import LINE SDK สำหรับตรวจสอบ Token
 
 // 3. ตั้งค่า LINE Client ด้วยค่าจาก .env.local
