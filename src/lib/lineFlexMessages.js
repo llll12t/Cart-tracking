@@ -84,7 +84,9 @@ export function bookingCreatedAdmin(booking) {
   // ปุ่มเดียว: ยืนยันการจอง (ลิงก์ไปหน้ารายละเอียดจอง)
   const actions = [];
   if (confirmLiffId && bookingId) {
-    const detailUri = `https://liff.line.me/${confirmLiffId}?bookingId=${encodeURIComponent(bookingId)}`;
+    // Use liff.state to open the LIFF app and navigate to the confirm page for the booking
+    const detailUri = `https://liff.line.me/${process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID}?liff.state=/confirm/${bookingId}`;
+
     actions.push({ uri: detailUri, label: 'ยืนยันการจอง', style: 'primary', color: '#0ea5e9' });
   }
 
@@ -102,7 +104,8 @@ export function bookingApprovalRequestAdmin(booking) {
   const confirmLiffId = process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID || '';
   const actions = [];
   if (confirmLiffId && bookingId) {
-    const detailUri = `https://liff.line.me/${confirmLiffId}?bookingId=${encodeURIComponent(bookingId)}`;
+    // Use liff.state so LIFF opens and navigates to the confirm page with bookingId
+    const detailUri = `https://liff.line.me/${process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID}?liff.state=/confirm/${bookingId}`;
     actions.push({ uri: detailUri, label: 'ตรวจสอบและอนุมัติ', style: 'primary', color: '#0ea5e9' });
   }
   return { altText: `ขออนุมัติการจองจาก ${booking.requesterName || ''}`, contents: baseBubble(title, fields, '', actions) };
