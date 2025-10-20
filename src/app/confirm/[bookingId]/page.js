@@ -136,6 +136,14 @@ export default function ConfirmBookingPage() {
 
   return (
     <div className="p-8 max-w-2xl mx-auto">
+      {/* LIFF diagnostics panel for debugging */}
+      <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm">
+        <div><strong>LIFF diagnostics:</strong></div>
+        <div>isInClient: {liff && typeof liff.isInClient === 'function' ? String(liff.isInClient()) : 'n/a'}</div>
+        <div>isLoggedIn: {liff && typeof liff.isLoggedIn === 'function' ? String(liff.isLoggedIn()) : 'n/a'}</div>
+        <div>has getIDToken: {liff && typeof liff.getIDToken === 'function' ? 'yes' : 'no'}</div>
+        <div>profile: {profile ? (profile.displayName || profile.userId || JSON.stringify(profile)) : 'none'}</div>
+      </div>
       <h1 className="text-2xl font-bold mb-4">รายละเอียดการจอง</h1>
       <div className="bg-white p-6 rounded shadow">
         {booking ? (

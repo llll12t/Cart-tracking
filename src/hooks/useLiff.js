@@ -66,6 +66,7 @@ const useLiff = (liffId) => {
 
                 const params = new URLSearchParams(window.location.search);
                 let redirectPath = params.get('liff.state');
+                console.debug('useLiff: raw liff.state from query =', redirectPath);
 
                 // Normalize redirectPath: handle nested or double-encoded values like
                 // %3Fliff.state%3D%252Fconfirm%252F<id>
