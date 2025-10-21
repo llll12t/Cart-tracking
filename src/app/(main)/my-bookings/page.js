@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, orderBy, doc } from "firebase/firestore";
+import { collection, query, where, orderBy, doc, getDocs, limit, startAfter, onSnapshot } from "firebase/firestore";
+import { getImageUrl } from '@/lib/imageHelpers';
 import MainHeader from '@/components/main/MainHeader';
 
 // Component สำหรับแสดงข้อมูลการจอง 1 รายการ
@@ -34,6 +35,12 @@ function BookingCard({ booking }) {
         if (d instanceof Date) return d.toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         // ISO string
         try {
+            // If value is a calendar-only string like 'YYYY-MM-DD', construct local midnight
+            if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+                const parts = d.split('-');
+                const localDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0);
+                return localDate.toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            }
             const parsed = new Date(d);
             if (!isNaN(parsed)) return parsed.toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         } catch (e) {}
@@ -42,9 +49,11 @@ function BookingCard({ booking }) {
 
     const getBookingDate = (bk, type) => {
         // type: 'start' | 'end'
+        // Prefer the explicit timestamp fields (startDateTime/endDateTime) which represent the intended local moment.
+        // Prefer precise timestamp fields first, then calendar-only strings, then legacy date fields
         const candidates = {
-            start: [bk.startDate, bk.startDateTime, bk.start],
-            end: [bk.endDate, bk.endDateTime, bk.end]
+            start: [bk.startDateTime, bk.startCalendarDate || bk.startDate, bk.start],
+            end: [bk.endDateTime, bk.endCalendarDate || bk.endDate, bk.end]
         }[type] || [];
         for (const c of candidates) if (c) return c;
         return null;
@@ -75,8 +84,12 @@ function BookingCard({ booking }) {
     return (
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
             <div className="flex p-4 gap-4">
-                {/* Vehicle Image Placeholder */}
-                <div className="w-20 h-20 bg-gray-200 rounded-lg flex-shrink-0"></div>
+                                {/* Vehicle Image Placeholder */}
+                                <div className="w-20 h-20 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden">
+                                    {getImageUrl(vehicle) ? (
+                                        <img src={getImageUrl(vehicle)} alt={`${vehicle?.brand || ''} ${vehicle?.model || ''}`} className="w-full h-full object-cover" />
+                                    ) : null}
+                                </div>
                 
                 <div className="flex-1">
                     <div className="flex flex-row justify-between items-start">
@@ -168,6 +181,11 @@ export default function MyBookingsPage() {
   const [activeTab, setActiveTab] = useState('history');
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(true);
+    const lastDocRef = useRef(null);
+    const sentinelRef = useRef(null);
+    const PAGE_SIZE = 5;
 
     useEffect(() => {
         // wait for auth to resolve first
@@ -180,19 +198,65 @@ export default function MyBookingsPage() {
             return;
         }
 
-        const q = query(
-                collection(db, "bookings"), 
-                where("userId", "==", user.uid),
-                orderBy("createdAt", "desc")
-        );
+            let mounted = true;
 
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            const userBookings = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setBookings(userBookings);
-            setLoading(false);
-        });
+            async function loadPage(startAfterDoc = null) {
+                try {
+                    const base = collection(db, 'bookings');
+                    let q;
+                    if (startAfterDoc) {
+                        q = query(base, where('userId', '==', user.uid), orderBy('createdAt', 'desc'), startAfter(startAfterDoc), limit(PAGE_SIZE));
+                    } else {
+                        q = query(base, where('userId', '==', user.uid), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
+                    }
+                    const snap = await getDocs(q);
+                    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-        return () => unsubscribe();
+                    // Update last visible
+                    const lastVisible = snap.docs[snap.docs.length - 1] || null;
+                    if (mounted) {
+                        if (!startAfterDoc) {
+                            setBookings(docs);
+                        } else {
+                            setBookings(prev => [...prev, ...docs]);
+                        }
+                        lastDocRef.current = lastVisible;
+                        // If fewer than page size returned, no more pages
+                        setHasMore(snap.docs.length === PAGE_SIZE);
+                        setLoading(false);
+                    }
+                } catch (e) {
+                    console.error('Failed to load bookings page', e);
+                    if (mounted) setLoading(false);
+                }
+            }
+
+            // initial load
+            loadPage();
+
+            // IntersectionObserver to lazy load more when sentinel is visible
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting && !loadingMore && hasMore) {
+                        // load next page
+                        (async () => {
+                            setLoadingMore(true);
+                            try {
+                                await loadPage(lastDocRef.current);
+                            } finally {
+                                setLoadingMore(false);
+                            }
+                        })();
+                    }
+                });
+            }, { root: null, rootMargin: '200px', threshold: 0.1 });
+
+            if (sentinelRef.current) observer.observe(sentinelRef.current);
+
+            return () => {
+                mounted = false;
+                if (sentinelRef.current) observer.unobserve(sentinelRef.current);
+            };
     }, [user, authLoading]);
 
   if (loading) {
@@ -204,17 +268,26 @@ export default function MyBookingsPage() {
   }
 
   return (
-    <div className="min-h-screen ">
+    <div className="min-h-screen bg-gray-100">
       <MainHeader userProfile={userProfile} activeTab={activeTab} setActiveTab={setActiveTab} />
-
       {/* Content Area */}
       <div className="bg-gray-100 p-4 -mt-16 pb-8">
-        {bookings.length > 0 ? (
-          <div className="space-y-4">
-            {bookings.map((booking) => (
-              <BookingCard key={booking.id} booking={booking} />
-            ))}
-          </div>
+                {bookings.length > 0 ? (
+                    <div className="space-y-4">
+                        {bookings.map((booking) => (
+                            <BookingCard key={booking.id} booking={booking} />
+                        ))}
+                        {/* Sentinel element observed by IntersectionObserver to lazy-load more */}
+                        <div ref={sentinelRef} className="h-8 flex items-center justify-center">
+                            {loadingMore ? (
+                                <p className="text-sm text-gray-500">กำลังโหลดเพิ่มเติม...</p>
+                            ) : (!hasMore ? (
+                                <p className="text-sm text-gray-400">ไม่มีข้อมูลเพิ่มเติม</p>
+                            ) : (
+                                <p className="text-sm text-gray-400">เลื่อนลงเพื่อโหลดเพิ่มเติม</p>
+                            ))}
+                        </div>
+                    </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
             <p className="text-gray-500">ไม่มีประวัติการจอง</p>

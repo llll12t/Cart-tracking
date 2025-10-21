@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, writeBatch } from "firebase/firestore";
 import Image from 'next/image';
+import { getImageUrl } from '@/lib/imageHelpers';
 
 // Modal Component
 function AssignVehicleModal({ booking, onClose, onAssign }) {
@@ -139,8 +140,8 @@ function AssignVehicleModal({ booking, onClose, onAssign }) {
               if (sv) {
                 return (
                   <div className="flex items-center gap-3 p-3 border rounded-md mb-3">
-                    {sv.imageUrl ? (
-                      <Image src={sv.imageUrl} alt={`${sv.brand} ${sv.model}`} width={80} height={56} className="object-cover rounded" unoptimized />
+                    {getImageUrl(sv) ? (
+                      <Image src={getImageUrl(sv)} alt={`${sv.brand} ${sv.model}`} width={80} height={56} className="object-cover rounded" unoptimized />
                     ) : (
                       <div className="w-20 h-14 bg-gray-100 rounded flex items-center justify-center text-sm text-gray-500">No Image</div>
                     )}
@@ -163,8 +164,8 @@ function AssignVehicleModal({ booking, onClose, onAssign }) {
               if (d) {
                 return (
                   <div className="flex items-center gap-3 p-3 border rounded-md">
-                    {d.imageUrl ? (
-                      <Image src={d.imageUrl} alt={d.name} width={48} height={48} className="rounded-full object-cover" unoptimized />
+                    {getImageUrl(d) ? (
+                      <Image src={getImageUrl(d)} alt={d.name} width={48} height={48} className="rounded-full object-cover" unoptimized />
                     ) : (
                       <div className="w-12 h-12 rounded-full bg-teal-600 text-white flex items-center justify-center font-semibold">{(d.name || d.email || 'U')[0]}</div>
                     )}
@@ -191,9 +192,9 @@ function AssignVehicleModal({ booking, onClose, onAssign }) {
                     onClick={() => setSelectedDriverId(d.id)}
                     className={`flex items-center gap-3 p-3 border rounded-md cursor-pointer transition ${selectedDriverId === d.id ? 'border-blue-600 shadow-sm' : 'border-gray-200 hover:shadow-sm'}`}
                   >
-                    {d.imageUrl ? (
+                    {getImageUrl(d) ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={d.imageUrl} alt={d.name} className="w-12 h-12 rounded-full object-cover" />
+                      <img src={getImageUrl(d)} alt={d.name} className="w-12 h-12 rounded-full object-cover" />
                     ) : (
                       <div className="w-12 h-12 rounded-full bg-teal-600 text-white flex items-center justify-center font-semibold">{(d.name || d.email || 'U')[0]}</div>
                     )}
@@ -227,9 +228,14 @@ export default function ApprovalCard({ booking }) {
   const formatDateOnly = (value) => {
     if (!value) return '-';
     try {
+      // If the stored value is a Firestore timestamp
       let d;
-      if (value.seconds) d = new Date(value.seconds * 1000);
-      else if (value.toDate) d = new Date(value.toDate());
+      if (value.seconds && typeof value.seconds === 'number') d = new Date(value.seconds * 1000);
+      // If it's a calendar-only string YYYY-MM-DD, construct local midnight
+      else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const parts = value.split('-');
+        d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0);
+      } else if (value.toDate) d = new Date(value.toDate());
       else d = value instanceof Date ? value : new Date(value);
       return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('th-TH');
     } catch (e) {
@@ -356,13 +362,13 @@ export default function ApprovalCard({ booking }) {
         <div className="flex flex-col gap-6 items-center">
           {/* รูปรถและคนจอง */}
           <div className="flex flex-row gap-4 items-center mb-2">
-            {booking.vehicleImageUrl ? (
-              <Image src={booking.vehicleImageUrl} alt="Vehicle" width={100} height={76} className="rounded-xl border object-cover bg-gray-50" unoptimized />
+            {getImageUrl({ vehicleImageUrl: booking.vehicleImageUrl, imageUrl: booking.vehicleImageUrl }) ? (
+              <Image src={getImageUrl({ vehicleImageUrl: booking.vehicleImageUrl, imageUrl: booking.vehicleImageUrl })} alt="Vehicle" width={100} height={76} className="rounded-xl border object-cover bg-gray-50" unoptimized />
             ) : (
               <div className="w-28 h-20 bg-gray-100 rounded-xl flex items-center justify-center text-xs text-gray-500 border">ไม่มีรูป</div>
             )}
-            {booking.requesterImageUrl ? (
-              <Image src={booking.requesterImageUrl} alt="Requester" width={56} height={56} className="rounded-full border object-cover bg-gray-50" unoptimized />
+            {getImageUrl({ photoURL: booking.requesterImageUrl, imageUrl: booking.requesterImageUrl }) ? (
+              <Image src={getImageUrl({ photoURL: booking.requesterImageUrl, imageUrl: booking.requesterImageUrl })} alt="Requester" width={56} height={56} className="rounded-full border object-cover bg-gray-50" unoptimized />
             ) : (
               <div className="w-14 h-14 rounded-full bg-teal-600 text-white flex items-center justify-center font-bold text-xl">{(requesterNameState || booking.requesterName || booking.userEmail || 'U')[0]}</div>
             )}
@@ -381,8 +387,8 @@ export default function ApprovalCard({ booking }) {
             <div className="space-y-1 text-sm text-gray-700 mt-2">
               <div><span className="font-semibold">ต้นทาง:</span> {booking.origin || '-'}</div>
               <div><span className="font-semibold">ปลายทาง:</span> {booking.destination || '-'}</div>
-              <div><span className="font-semibold">วันที่เริ่มต้น:</span> {booking.startDate || booking.startDateTime ? formatDateOnly(booking.startDate || booking.startDateTime) : '-'}</div>
-              <div><span className="font-semibold">วันที่สิ้นสุด:</span> {booking.endDate || booking.endDateTime ? formatDateOnly(booking.endDate || booking.endDateTime) : '-'}</div>
+                <div><span className="font-semibold">วันที่เริ่มต้น:</span> {booking.startDateTime || booking.startCalendarDate || booking.startDate ? formatDateOnly(booking.startDateTime || booking.startCalendarDate || booking.startDate) : '-'}</div>
+                <div><span className="font-semibold">วันที่สิ้นสุด:</span> {booking.endDateTime || booking.endCalendarDate || booking.endDate ? formatDateOnly(booking.endDateTime || booking.endCalendarDate || booking.endDate) : '-'}</div>
               <div><span className="font-semibold">ทะเบียนรถ:</span> {booking.vehicleLicensePlate || booking.vehicleId || '-'}</div>
               <div><span className="font-semibold">วัตถุประสงค์:</span> <span className="text-gray-600">{booking.purpose || '-'}</span></div>
               {booking.notes && <div><span className="font-semibold">หมายเหตุ:</span> {booking.notes}</div>}

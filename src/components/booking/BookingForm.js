@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { getImageUrl } from '@/lib/imageHelpers';
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp, query, where, onSnapshot } from "firebase/firestore";
@@ -21,9 +22,7 @@ export default function BookingForm() {
   // origin should be fixed to บริษัท
   const FIXED_ORIGIN = 'บริษัท';
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
+  const [startTime, setStartTime] = useState('00:00');
   const [isMileageEditing, setIsMileageEditing] = useState(false);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -86,8 +85,8 @@ export default function BookingForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedVehicle || !destination || !startDate || !endDate) {
-      setMessage("กรุณากรอกข้อมูลให้ครบ: เลือกรถ, จุดหมาย, และวันที่เริ่ม/สิ้นสุด");
+    if (!selectedVehicle || !destination || !startDate) {
+      setMessage("กรุณากรอกข้อมูลให้ครบ: เลือกรถ, จุดหมาย, และวันที่เริ่ม");
       return;
     }
     if (!user) {
@@ -99,13 +98,11 @@ export default function BookingForm() {
     try {
       const selectedVehicleData = vehicles.find(v => v.id === selectedVehicle);
 
-      // validate date order
-      if (new Date(endDate) < new Date(startDate)) {
-        setMessage('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม');
-        setIsLoading(false);
-        return;
-      }
+      // combine date + time into local Date to represent the intended local moment
+      const startDateTime = new Date(`${startDate}T${startTime}:00`);
 
+      // store calendar-only date string separately (preserve user's intended calendar date)
+      // and store startDateTime (JS Date) which will be saved as Firestore Timestamp
       const bookingData = {
         userId: user.uid,
         userEmail: user.email,
@@ -116,8 +113,11 @@ export default function BookingForm() {
         origin: FIXED_ORIGIN,
         destination,
         purpose,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        // keep the original date string YYYY-MM-DD so we can display the calendar date exactly as entered
+        startCalendarDate: startDate,
+        startTime: startTime,
+        // store combined timestamp (local time)
+        startDateTime,
         status: "pending",
         createdAt: serverTimestamp(),
       };
@@ -141,8 +141,9 @@ export default function BookingForm() {
       setOriginalMileage(null);
       setIsMileageEditing(false);
       setPurpose("");
-      setStartDate(new Date().toISOString().slice(0, 10));
-      setEndDate(new Date().toISOString().slice(0, 10));
+  setStartDate(new Date().toISOString().slice(0, 10));
+    // reset start time to midnight
+    setStartTime('00:00');
       setIsLoading(false);
 
       // Trigger LINE notification (fire-and-forget) only if settings allow
@@ -163,8 +164,7 @@ export default function BookingForm() {
               requesterName: bookingData.requesterName,
               userEmail: bookingData.userEmail,
               vehicleLicensePlate: bookingData.vehicleLicensePlate,
-              startDate: bookingData.startDate instanceof Date ? bookingData.startDate.toISOString() : new Date(bookingData.startDate).toISOString(),
-              endDate: bookingData.endDate instanceof Date ? bookingData.endDate.toISOString() : new Date(bookingData.endDate).toISOString()
+              startDateTime: startDateTime instanceof Date ? startDateTime.toISOString() : new Date(startDateTime).toISOString()
             }
           };
           // fire-and-forget
@@ -210,8 +210,8 @@ export default function BookingForm() {
                     if (!sel) return <span className="text-gray-500">-- เลือกรถ --</span>;
                     return (
                       <>
-                        {sel.imageUrl ? (
-                          <Image src={sel.imageUrl} alt={`${sel.brand} ${sel.model}`} width={40} height={32} className="object-cover rounded-md border" unoptimized />
+            {getImageUrl(sel) ? (
+              <Image src={getImageUrl(sel)} alt={`${sel.brand} ${sel.model}`} width={40} height={32} className="object-cover rounded-md border" unoptimized />
                         ) : (
                           <div className="w-10 h-8 bg-gray-200 rounded-md flex items-center justify-center text-xs text-gray-500 border">ไม่มีรูป</div>
                         )}
@@ -242,8 +242,8 @@ export default function BookingForm() {
                   onClick={() => { setSelectedVehicle(v.id); setIsOpen(false); setMileage(v.currentMileage ?? ''); }}
                   className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50"
                 >
-                  {v.imageUrl ? (
-                    <Image src={v.imageUrl} alt={`${v.brand} ${v.model}`} width={48} height={32} className="object-cover rounded-md border" unoptimized />
+                  {getImageUrl(v) ? (
+                    <Image src={getImageUrl(v)} alt={`${v.brand} ${v.model}`} width={48} height={32} className="object-cover rounded-md border" unoptimized />
                   ) : (
                     <div className="w-12 h-8 bg-gray-100 rounded-md flex items-center justify-center text-xs text-gray-500 border">ไม่มีรูป</div>
                   )}
@@ -264,7 +264,7 @@ export default function BookingForm() {
           {!isMileageEditing ? (
             <div className="flex items-center gap-3">
               <div className="flex-1 px-4 py-3 border border-gray-200 rounded-lg bg-gray-50">{mileage || '-'}</div>
-              <button type="button" onClick={() => setIsMileageEditing(true)} className="px-3 py-2 bg-gray-100 text-black rounded">แก้ไข</button>
+              <button type="button" onClick={() => setIsMileageEditing(true)} className="p-3 bg-gray-100 text-black rounded">แก้ไข</button>
             </div>
           ) : (
             <div className="flex items-center gap-3">
@@ -274,8 +274,7 @@ export default function BookingForm() {
           )}
         </div>
 
-        {/* จุดเริ่ม (คงที่) และ จุดหมาย */}
-        <div className="flex">
+        <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-teal-700 mb-1">จุดหมาย</label>
             <input
@@ -292,7 +291,7 @@ export default function BookingForm() {
         {/* กำหนดการ (วันที่เริ่ม - วันที่สิ้นสุด) */}
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-teal-700 mb-1">วันที่เริ่ม</label>
+            <label className="block text-sm font-medium text-teal-700 mb-1">วันที่จะใช้รถ</label>
             <div className="flex gap-2">
               <input
                 type="date"
@@ -305,25 +304,6 @@ export default function BookingForm() {
                 type="time"
                 value={startTime || ''}
                 onChange={e => setStartTime(e.target.value)}
-                className="w-1/2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                required
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-teal-700 mb-1">วันที่สิ้นสุด</label>
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-1/2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                required
-              />
-              <input
-                type="time"
-                value={endTime || ''}
-                onChange={e => setEndTime(e.target.value)}
                 className="w-1/2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
                 required
               />

@@ -18,6 +18,8 @@ export default function AddVehicleForm({ onClose }) {
     imageUrl: '',
   });
   const [imageFile, setImageFile] = useState(null);
+  const [imageBroken, setImageBroken] = useState(false);
+  const [imageUrlInput, setImageUrlInput] = useState('');
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -27,11 +29,24 @@ export default function AddVehicleForm({ onClose }) {
   };
 
   const handleFileChange = (e) => {
-    if (e.target.files[0]) {
-      setImageFile(e.target.files[0]);
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      // set temporary preview URL
+      setFormData(prev => ({ ...prev, imageUrl: URL.createObjectURL(file) }));
+      setImageBroken(false);
     } else {
       setImageFile(null);
+      setFormData(prev => ({ ...prev, imageUrl: '' }));
     }
+  };
+
+  const applyImageUrl = () => {
+    if (!imageUrlInput) return;
+    setImageFile(null);
+    setFormData(prev => ({ ...prev, imageUrl: imageUrlInput }));
+    setImageUrlInput('');
+    setImageBroken(false);
   };
 
   const handleSubmit = async (e) => {
@@ -84,67 +99,102 @@ export default function AddVehicleForm({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="w-full max-w-lg p-8 bg-white rounded-lg shadow-2xl">
+  <div className="w-full max-w-5xl p-8 bg-white rounded-lg shadow-2xl">
         <h2 className="mb-6 text-2xl font-bold">เพิ่มข้อมูลรถใหม่</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input type="text" name="licensePlate" placeholder="ทะเบียนรถ (เช่น กข 1234)" onChange={handleChange} required className="w-full p-2 border rounded"/>
-          <input type="text" name="brand" placeholder="ยี่ห้อ (เช่น Toyota)" onChange={handleChange} required className="w-full p-2 border rounded"/>
-          <input type="text" name="model" placeholder="รุ่น (เช่น Hilux)" onChange={handleChange} required className="w-full p-2 border rounded"/>
-          <input type="number" name="currentMileage" placeholder="เลขไมล์ปัจจุบัน" onChange={handleChange} required className="w-full p-2 border rounded"/>
-          
-          <div>
-            <label className="block mb-1 text-sm">วันสิ้นสุดภาษี</label>
-            <input type="date" name="taxDueDate" onChange={handleChange} className="w-full p-2 border rounded"/>
-          </div>
-          <div>
-            <label className="block mb-1 text-sm">วันหมดอายุประกัน</label>
-            <input type="date" name="insuranceExpireDate" onChange={handleChange} className="w-full p-2 border rounded"/>
-          </div>
+        <form onSubmit={handleSubmit} className="bg-white p-4 rounded">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* main form (span 2) */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block mb-1 text-sm">ทะเบียน</label>
+                  <input type="text" name="licensePlate" placeholder="ทะเบียนรถ (เช่น กข 1234)" onChange={handleChange} required className="w-full p-2 border rounded"/>
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm">เลขไมล์ปัจจุบัน</label>
+                  <input type="number" name="currentMileage" placeholder="เลขไมล์ปัจจุบัน" onChange={handleChange} required className="w-full p-2 border rounded"/>
+                </div>
+              </div>
 
-          <div>
-            <label className="block mb-1 text-sm">รูปภาพรถ</label>
-            <input 
-                type="file" 
-                onChange={handleFileChange} 
-                accept="image/*" 
-                className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-            />
-            <p className="text-xs text-gray-500 mt-1">หรือกรอก URL รูปภาพโดยตรง:</p>
-            <input 
-                type="text" 
-                name="imageUrl" 
-                value={formData.imageUrl}
-                onChange={handleChange} 
-                placeholder="https://example.com/car-image.jpg" 
-                className="w-full p-2 border rounded mt-1"
-                disabled={!!imageFile}
-            />
-            {imageFile && <p className="text-sm text-green-600 mt-1">ไฟล์ที่เลือก: {imageFile.name}</p>}
-          </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block mb-1 text-sm">ยี่ห้อ</label>
+                  <input type="text" name="brand" placeholder="ยี่ห้อ (เช่น Toyota)" onChange={handleChange} required className="w-full p-2 border rounded"/>
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm">รุ่น</label>
+                  <input type="text" name="model" placeholder="รุ่น (เช่น Hilux)" onChange={handleChange} required className="w-full p-2 border rounded"/>
+                </div>
+              </div>
 
-          <div>
-            <label className="block mb-1 text-sm">ประเภทรถ</label>
-            <select name="type" onChange={handleChange} value={formData.type} className="w-full p-2 border rounded">
-              <option value="รถเก๋ง">รถเก๋ง (Sedan)</option>
-              <option value="รถกระบะ">รถกระบะ (Pickup)</option>
-              <option value="รถตู้">รถตู้ (Van)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block mb-1 text-sm">สถานะเริ่มต้น</label>
-            <select name="status" onChange={handleChange} value={formData.status} className="w-full p-2 border rounded">
-              <option value="available">ว่าง (Available)</option>
-              <option value="maintenance">ซ่อมบำรุง (Maintenance)</option>
-            </select>
-          </div>
-          
-          {message && <p className="text-center text-sm">{message}</p>}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block mb-1 text-sm">วันสิ้นสุดภาษี</label>
+                  <input type="date" name="taxDueDate" onChange={handleChange} className="w-full p-2 border rounded"/>
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm">วันหมดอายุประกัน</label>
+                  <input type="date" name="insuranceExpireDate" onChange={handleChange} className="w-full p-2 border rounded"/>
+                </div>
+              </div>
 
-          <div className="flex justify-end gap-4 pt-4">
-            <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50">ยกเลิก</button>
-            <button type="submit" disabled={isLoading} className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700 disabled:bg-gray-400">
-                {isLoading ? 'กำลังบันทึก...' : 'บันทึก'}
-            </button>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block mb-1 text-sm">ประเภทรถ</label>
+                  <select name="type" onChange={handleChange} value={formData.type} className="w-full p-2 border rounded">
+                    <option value="รถเก๋ง">รถเก๋ง (Sedan)</option>
+                    <option value="รถกระบะ">รถกระบะ (Pickup)</option>
+                    <option value="รถตู้">รถตู้ (Van)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm">สถานะเริ่มต้น</label>
+                  <select name="status" onChange={handleChange} value={formData.status} className="w-full p-2 border rounded">
+                    <option value="available">ว่าง (Available)</option>
+                    <option value="maintenance">ซ่อมบำรุง (Maintenance)</option>
+                  </select>
+                </div>
+              </div>
+
+              {message && <div className="text-sm text-center text-teal-700">{message}</div>}
+            </div>
+
+            {/* right column - preview & actions */}
+            <aside className="flex flex-col items-center gap-4">
+              <div className="w-full">
+                <label className="block mb-2 text-sm font-medium">รูปรถ</label>
+                <div className="w-full bg-gray-50 rounded-lg border p-3 flex items-center justify-center">
+                    {formData.imageUrl ? (
+                      !imageBroken ? (
+                        <img src={formData.imageUrl} alt="Vehicle" className="w-full h-44 object-cover rounded" onError={() => setImageBroken(true)} />
+                      ) : (
+                        <img src={formData.imageUrl} alt="Vehicle" className="w-full h-44 object-cover rounded" />
+                      )
+                    ) : (
+                      <div className="w-full h-44 bg-gray-100 flex items-center justify-center rounded text-gray-400">ไม่มีรูป</div>
+                    )}
+                  </div>
+                <input type="file" accept="image/*" onChange={handleFileChange} className="mt-3 w-full" />
+                <div className="mt-3 flex gap-2">
+                  <input value={imageUrlInput} onChange={(e) => setImageUrlInput(e.target.value)} placeholder="วางลิงก์รูปที่นี่" className="flex-1 p-2 border rounded" />
+                  <button type="button" onClick={applyImageUrl} className="px-3 py-2 bg-blue-600 text-white rounded">ใช้ลิงก์</button>
+                </div>
+              </div>
+
+              <div className="w-full bg-gray-50 p-3 rounded border text-sm">
+                <div className="font-semibold">ข้อมูลสรุป</div>
+                <div className="text-xs text-gray-600 mt-2">{formData.brand} {formData.model}</div>
+                <div className="text-xs text-gray-600">ทะเบียน: {formData.licensePlate}</div>
+                <div className="text-xs text-gray-600">ไมล์: {formData.currentMileage}</div>
+                <div className="text-xs text-gray-600">สถานะ: {formData.status || '-'}</div>
+              </div>
+
+              <div className="w-full flex gap-3">
+                <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
+                <button type="submit" className="flex-1 px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700">บันทึก</button>
+              </div>
+              {message && <p className="text-center text-sm text-teal-700 mt-2">{message}</p>}
+            </aside>
           </div>
         </form>
       </div>

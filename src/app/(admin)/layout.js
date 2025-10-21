@@ -15,7 +15,18 @@ export default function AdminLayout({ children }) {
 
   useEffect(() => {
     if (!loading && !userProfile) {
+      // not logged in / no profile -> send to main
       router.replace("/");
+      return;
+    }
+
+    // Role enforcement: allow only admin and employee to access admin area
+    if (!loading && userProfile) {
+      const role = userProfile.role;
+      if (role !== 'admin' && role !== 'employee') {
+        // drivers (and any other roles) are not allowed in admin area
+        router.replace('/');
+      }
     }
   }, [loading, userProfile, router]);
 

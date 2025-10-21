@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, doc, updateDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import LogExpenseForm from '@/components/driver/LogExpenseForm';
+import Image from 'next/image';
+import { getImageUrl } from '@/lib/imageHelpers';
 import { useRouter } from 'next/navigation';
 import MainHeader from '@/components/main/MainHeader';
 
@@ -58,11 +60,28 @@ function TripCard({ trip }) {
             return;
         }
 
-        const tripRef = doc(db, "bookings", trip.id);
-        await updateDoc(tripRef, {
-            status: "on_trip",
-            startMileage: Number(startMileage),
-        });
+        // Use a batch to update booking and vehicle atomically
+        try {
+            const batch = writeBatch(db);
+            const tripRef = doc(db, "bookings", trip.id);
+            batch.update(tripRef, {
+                status: "on_trip",
+                startMileage: Number(startMileage),
+                startDateTime: serverTimestamp(),
+            });
+
+            const vehicleRef = doc(db, "vehicles", trip.vehicleId);
+            batch.update(vehicleRef, {
+                status: "in_use",
+                // update vehicle's currentMileage to reflect start mileage
+                currentMileage: Number(startMileage)
+            });
+
+            await batch.commit();
+        } catch (e) {
+            console.error('Failed to start trip batch update', e);
+            alert('ไม่สามารถเริ่มทริปได้ในขณะนี้');
+        }
     };
 
     const handleEndTrip = async () => {
@@ -80,6 +99,7 @@ function TripCard({ trip }) {
         batch.update(tripRef, {
             status: "completed",
             endMileage: Number(endMileage),
+            endDateTime: serverTimestamp(),
         });
 
         const vehicleRef = doc(db, "vehicles", trip.vehicleId);
@@ -88,7 +108,23 @@ function TripCard({ trip }) {
             currentMileage: Number(endMileage)
         });
         
-        await batch.commit();
+        try {
+            await batch.commit();
+        } catch (e) {
+            console.error('Failed to commit end-trip batch', e);
+            alert('ไม่สามารถบันทึกการคืนรถได้ กรุณาลองอีกครั้ง');
+            return;
+        }
+
+        // หลัง commit สำเร็จ อัปเดตสถานะ vehicle ใน UI (local) ถ้ามี
+        try {
+            if (vehicle) {
+                // update local state to reflect server-side change
+                setVehicle(prev => ({ ...prev, status: 'available', currentMileage: Number(endMileage) }));
+            }
+        } catch (e) {
+            console.warn('Failed to update local vehicle state after commit', e);
+        }
 
         // แจ้งแอดมินเมื่อคืนรถ
         try {
@@ -127,16 +163,24 @@ function TripCard({ trip }) {
             <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
                 {/* Vehicle Info Section */}
                 <div className="flex p-4 gap-4">
-                    {/* Vehicle Image Placeholder */}
-                    <div className="w-20 h-20 bg-gray-200 rounded-lg flex-shrink-0"></div>
+                    {/* Vehicle Image Placeholder / actual image if available */}
+                        <div className="w-20 h-20 rounded-lg flex-shrink-0 overflow-hidden bg-gray-200">
+                            {getImageUrl(vehicle) ? (
+                                <Image src={getImageUrl(vehicle)} alt={`${vehicle?.brand || ''} ${vehicle?.model || ''}`} width={80} height={80} className="object-cover w-full h-full" unoptimized />
+                            ) : (
+                                <div className="w-full h-full flex items-center justify-center text-xs text-gray-500">ไม่มีรูป</div>
+                            )}
+                        </div>
                     
                     <div className="flex-1">
                         <div className="flex justify-between items-start">
                             <div>
                                 <p className="text-sm text-gray-600">ยี่ห้อ</p>
                                 <p className="font-semibold">{vehicle?.brand || '-'}</p>
-                                <p className="text-sm text-gray-600 mt-1">รุ่น</p>
-                                <p className="font-semibold">{vehicle?.model || '-'}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <p className="text-sm text-gray-600">รุ่น</p>
+                                    <p className="font-semibold">{vehicle?.model || '-'}</p>
+                                </div>
                             </div>
                             <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
                                 trip.status === 'pending' ? 'bg-orange-100 text-orange-700' : 
@@ -284,7 +328,8 @@ export default function MyTripsPage() {
             return;
         };
 
-        if (userProfile.role !== 'driver') {
+        // allow drivers and admins to fetch trips; employees should not access driver trip list
+        if (userProfile.role !== 'driver' && userProfile.role !== 'admin') {
             setLoading(false);
             return;
         }
@@ -316,7 +361,7 @@ export default function MyTripsPage() {
         </div>
     );
     
-    if (userProfile?.role !== 'driver') {
+    if (userProfile?.role !== 'driver' && userProfile?.role !== 'admin') {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <p className="text-center text-gray-600">หน้านี้สำหรับพนักงานขับรถเท่านั้น</p>
@@ -325,7 +370,7 @@ export default function MyTripsPage() {
     }
 
     return (
-        <div className="min-h-screen">
+        <div className="min-h-screen bg-gray-100">
             {/* Header with User Profile */}
             <MainHeader userProfile={userProfile} activeTab={activeTab} setActiveTab={setActiveTab} />
             {/* Content Area */}

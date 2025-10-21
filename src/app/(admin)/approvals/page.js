@@ -31,7 +31,9 @@ export default function ApprovalsPage() {
           // Required fields: accept userId/userEmail as valid requester info too
           if (!b.requesterName && !b.requesterId && !b.userId && !b.userEmail) issues.push('ไม่มีข้อมูลผู้ขอ');
           if (!b.vehicleId) issues.push('ไม่ได้เลือกรถ');
-          if (!b.startDate || !b.endDate) issues.push('ช่วงวันที่ไม่ครบ');
+          // End date is optional and will be recorded when the trip is completed by the driver.
+          // Require at least a start date (the date user intends to use the vehicle).
+          if (!b.startDate && !b.startCalendarDate && !b.startDateTime) issues.push('ไม่มีวันที่เริ่มต้น (วันที่จะใช้รถ)');
 
           // Date sanity
           try {
@@ -58,15 +60,15 @@ export default function ApprovalsPage() {
             }
           }
 
-          // Overlapping approved bookings
-          if (b.vehicleId && b.startDate && b.endDate) {
+          // Overlapping approved bookings: only check when this booking includes both start and end dates
+          if (b.vehicleId && (b.startDate || b.startCalendarDate || b.startDateTime) && (b.endDate || b.endCalendarDate || b.endDateTime)) {
             try {
               const colRef = collection(db, 'bookings');
               // query for approved/on_trip/in_use bookings for same vehicle
               const q2 = query(colRef, where('vehicleId','==',b.vehicleId), where('status','in',['approved','in_use','on_trip']));
               const snap2 = await getDocs(q2);
-              const s = b.startDate.seconds ? b.startDate.seconds*1000 : new Date(b.startDate).getTime();
-              const e = b.endDate.seconds ? b.endDate.seconds*1000 : new Date(b.endDate).getTime();
+              const s = b.startDate?.seconds ? b.startDate.seconds*1000 : b.startCalendarDate ? new Date(b.startCalendarDate).getTime() : b.startDateTime ? (b.startDateTime.seconds ? b.startDateTime.seconds*1000 : new Date(b.startDateTime).getTime()) : new Date(b.startDate).getTime();
+              const e = b.endDate?.seconds ? b.endDate.seconds*1000 : b.endCalendarDate ? new Date(b.endCalendarDate).getTime() : b.endDateTime ? (b.endDateTime.seconds ? b.endDateTime.seconds*1000 : new Date(b.endDateTime).getTime()) : new Date(b.endDate).getTime();
               snap2.forEach(d2 => {
                 const other = d2.data();
                 const os = other.startDate?.seconds ? other.startDate.seconds*1000 : other.startDate ? new Date(other.startDate).getTime() : null;

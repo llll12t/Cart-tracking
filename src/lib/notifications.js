@@ -26,9 +26,15 @@ function normalizeBooking(b) {
     requesterName: b.requesterName || b.requester || b.userName || '',
     userEmail: b.userEmail || b.requesterEmail || b.requester?.email || '',
     vehicleLicensePlate: b.vehicleLicensePlate || b.vehicle?.licensePlate || b.vehicleId || '',
-    startDate: b.startDate || b.from || null,
-    endDate: b.endDate || b.to || null,
-    returnedAt: b.returnedAt || null
+    // Canonical fields introduced: startDateTime (instant), startCalendarDate (YYYY-MM-DD)
+    startDateTime: b.startDateTime || b.startDate || b.from || null,
+    startCalendarDate: b.startCalendarDate || b.startDate || null,
+    // end may be stored as endDateTime or endDate
+    endDateTime: b.endDateTime || b.endDate || b.to || null,
+    endCalendarDate: b.endCalendarDate || b.endDate || null,
+    // timestamps / lifecycle
+    sentAt: b.sentAt || null,
+    returnedAt: b.returnedAt || b.endDateTime || null
   };
 }
 

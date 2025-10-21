@@ -23,6 +23,12 @@ export default function AdminSidebar({ isOpen = false, onClose = () => { } }) {
 
   const pathname = usePathname();
 
+  // If userProfile is not present yet, or role disallows admin UI, don't render sidebar
+  if (!userProfile) return null;
+  const role = userProfile.role;
+  // Only admin and employee should see the admin sidebar
+  if (role !== 'admin' && role !== 'employee') return null;
+
   // Desktop sidebar
   const desktop = (
     <aside className="hidden md:flex w-64 h-screen p-4 text-white bg-gradient-to-b from-[#075b50] to-[#002629] shrink-0 flex-col justify-between">
@@ -53,6 +59,11 @@ export default function AdminSidebar({ isOpen = false, onClose = () => { } }) {
             <li className="mb-4">
               <Link href="/vehicles-analysis" className={`block p-2 rounded hover:bg-white/20 ${pathname === '/vehicles-analysis' ? 'bg-white/20' : ''}`} aria-current={pathname === '/vehicles-analysis' ? 'page' : undefined}>
                 วิเคราะห์การใช้งานรถ
+              </Link>
+            </li>
+            <li className="mb-4">
+              <Link href="/trip-history" className={`block p-2 rounded hover:bg-white/20 ${pathname === '/trip-history' ? 'bg-white/20' : ''}`} aria-current={pathname === '/trip-history' ? 'page' : undefined}>
+                ประวัติการเดินทาง
               </Link>
             </li>
             <li className="mb-4">
@@ -118,6 +129,11 @@ export default function AdminSidebar({ isOpen = false, onClose = () => { } }) {
             <li className="mb-4">
               <Link href="/vehicles-analysis" className={`block p-2 rounded hover:bg-white/20 ${pathname === '/vehicles-analysis' ? 'bg-white/20' : ''}`} onClick={onClose}>
                 วิเคราะห์การใช้งานรถ
+              </Link>
+            </li>
+            <li className="mb-4">
+              <Link href="/trip-history" className={`block p-2 rounded hover:bg-white/20 ${pathname === '/trip-history' ? 'bg-white/20' : ''}`} onClick={onClose}>
+                ประวัติการเดินทาง
               </Link>
             </li>
             <li className="mb-4">

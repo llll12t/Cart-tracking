@@ -76,7 +76,8 @@ export function bookingCreatedAdmin(booking) {
   const fields = [
     `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
-    `วันที่: ${fmtDate(booking.startDate)} → ${fmtDate(booking.endDate)}`
+    // Prefer startDateTime (instant) for accurate display, fall back to calendar-only date
+    `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)} → ${fmtDate(booking.endDateTime || booking.endCalendarDate || booking.endDate)}`
   ];
   const confirmLiffId = process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID || '';
   const bookingId = booking.id || booking.bookingId || booking._id || '';
@@ -98,7 +99,7 @@ export function bookingApprovalRequestAdmin(booking) {
   const fields = [
     `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
-    `วันที่: ${fmtDate(booking.startDate)} → ${fmtDate(booking.endDate)}`
+    `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)} → ${fmtDate(booking.endDateTime || booking.endCalendarDate || booking.endDate)}`
   ];
   const bookingId = booking.id || booking.bookingId || booking._id || '';
   const confirmLiffId = process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID || '';
@@ -116,7 +117,7 @@ export function bookingApprovedAdmin(booking) {
   const fields = [
     `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
-    `วันที่: ${fmtDate(booking.startDate)} → ${fmtDate(booking.endDate)}`
+    `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)} → ${fmtDate(booking.endDateTime || booking.endCalendarDate || booking.endDate)}`
   ];
   return { altText: `การจอง ${booking.id || ''} ได้รับการอนุมัติ`, contents: baseBubble(title, fields) };
 }
@@ -126,7 +127,8 @@ export function vehicleSentAdmin(booking) {
   const fields = [
     `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
-    `ส่งเมื่อ: ${fmtDate(booking.startDate || booking.sentAt || Date.now())}`
+    // sentAt preferred, otherwise use startDateTime or calendar date
+    `ส่งเมื่อ: ${fmtDate(booking.sentAt || booking.startDateTime || booking.startCalendarDate || Date.now())}`
   ];
   return { altText: `รถ ${booking.vehicleLicensePlate || ''} ถูกส่งแล้ว`, contents: baseBubble(title, fields) };
 }
@@ -136,7 +138,7 @@ export function vehicleReturnedAdmin(booking) {
   const fields = [
     `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
-    `คืนเมื่อ: ${fmtDate(booking.returnedAt || Date.now())}`
+    `คืนเมื่อ: ${fmtDate(booking.returnedAt || booking.endDateTime || booking.endCalendarDate || Date.now())}`
   ];
   return { altText: `รถ ${booking.vehicleLicensePlate || ''} ถูกคืนแล้ว`, contents: baseBubble(title, fields) };
 }
@@ -147,7 +149,7 @@ export function bookingCreatedDriver(booking) {
   const fields = [
     `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
-    `วันที่: ${fmtDate(booking.startDate)} → ${fmtDate(booking.endDate)}`
+    `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)} → ${fmtDate(booking.endDateTime || booking.endCalendarDate || booking.endDate)}`
   ];
   return { altText: `ขอจองรถ ${booking.id || ''}`, contents: baseBubble(title, fields) };
 }
@@ -156,7 +158,7 @@ export function bookingApprovedDriver(booking) {
   const title = 'คำขอของคุณได้รับการอนุมัติ';
   const fields = [
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
-    `วันที่: ${fmtDate(booking.startDate)} → ${fmtDate(booking.endDate)}`
+    `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)} → ${fmtDate(booking.endDateTime || booking.endCalendarDate || booking.endDate)}`
   ];
   return { altText: `การจองของคุณได้รับการอนุมัติ`, contents: baseBubble(title, fields) };
 }
@@ -165,7 +167,7 @@ export function vehicleSentDriver(booking) {
   const title = 'รถถูกส่งให้แล้ว';
   const fields = [
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
-    `ส่งเมื่อ: ${fmtDate(booking.startDate || booking.sentAt || Date.now())}`
+    `ส่งเมื่อ: ${fmtDate(booking.sentAt || booking.startDateTime || booking.startCalendarDate || Date.now())}`
   ];
   return { altText: `รถ ${booking.vehicleLicensePlate || ''} ถูกส่งแล้ว`, contents: baseBubble(title, fields) };
 }
@@ -174,7 +176,7 @@ export function vehicleReturnedDriver(booking) {
   const title = 'รถได้รับการคืนเรียบร้อย';
   const fields = [
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
-    `คืนเมื่อ: ${fmtDate(booking.returnedAt || Date.now())}`
+    `คืนเมื่อ: ${fmtDate(booking.returnedAt || booking.endDateTime || booking.endCalendarDate || Date.now())}`
   ];
   return { altText: `รถ ${booking.vehicleLicensePlate || ''} ถูกคืนแล้ว`, contents: baseBubble(title, fields) };
 }
@@ -185,7 +187,7 @@ export function bookingCreatedEmployee(booking) {
   const fields = [
     `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
-    `วันที่: ${fmtDate(booking.startDate)} → ${fmtDate(booking.endDate)}`
+    `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)} → ${fmtDate(booking.endDateTime || booking.endCalendarDate || booking.endDate)}`
   ];
   return { altText: `มีการขอจองรถจาก ${booking.requesterName || ''}`, contents: baseBubble(title, fields) };
 }
@@ -195,7 +197,7 @@ export function bookingRejectedAdmin(booking) {
   const fields = [
     `คำขอโดย: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
-    `วันที่: ${fmtDate(booking.startDate)} → ${fmtDate(booking.endDate)}`
+    `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)} → ${fmtDate(booking.endDateTime || booking.endCalendarDate || booking.endDate)}`
   ];
   return { altText: `คำขอ ${booking.id || ''} ถูกปฏิเสธ`, contents: baseBubble(title, fields) };
 }
@@ -204,7 +206,7 @@ export function bookingRejectedDriver(booking) {
   const title = 'คำขอของคุณถูกปฏิเสธ';
   const fields = [
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
-    `วันที่: ${fmtDate(booking.startDate)} → ${fmtDate(booking.endDate)}`
+    `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)} → ${fmtDate(booking.endDateTime || booking.endCalendarDate || booking.endDate)}`
   ];
   return { altText: `คำขอของคุณถูกปฏิเสธ`, contents: baseBubble(title, fields) };
 }
