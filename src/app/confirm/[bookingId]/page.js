@@ -85,9 +85,14 @@ export default function ConfirmBookingPage() {
     if (!value) return '-';
     try {
       let d;
+      // Prefer Firestore Timestamp-like startDateTime, otherwise accept calendar-only string
       if (value.seconds) d = new Date(value.seconds * 1000);
       else if (typeof value.toDate === 'function') d = value.toDate();
-      else d = new Date(value);
+      else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        // calendar-only string: treat as local midnight
+        const parts = value.split('-');
+        d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0);
+      } else d = new Date(value);
       if (isNaN(d.getTime())) return '-';
       return d.toLocaleDateString('th-TH', { dateStyle: 'medium' });
     } catch (e) {
@@ -104,6 +109,36 @@ export default function ConfirmBookingPage() {
       await updateDoc(bookingRef, { status: 'approved' });
       setBooking((prev) => prev ? { ...prev, status: 'approved' } : prev);
       setMessage('อนุมัติเรียบร้อยแล้ว');
+      // หลังอนุมัติ: แจ้งผู้ขับ (ถ้ามี) ว่ามีการมอบหมาย/อนุมัติ ให้ตรวจสอบการตั้งค่าการแจ้งเตือนก่อนส่ง
+      try {
+        if (driver && driver.lineId) {
+          // check notification settings
+          const settingsRes = await fetch('/api/notifications/settings');
+          const settings = await settingsRes.json().catch(() => ({}));
+          const roles = settings.roles || {};
+          const driverEnabled = typeof roles.driver?.booking_approved === 'boolean' ? roles.driver.booking_approved : true;
+          if (driverEnabled) {
+            await fetch('/api/notifications/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                event: 'booking_approved',
+                booking: {
+                  id: bookingId,
+                  requesterName: booking?.requesterName,
+                  userEmail: booking?.userEmail,
+                  vehicleLicensePlate: booking?.vehicleLicensePlate,
+                  // include canonical start fields so message builders can pick the best
+                  startDateTime: booking?.startDateTime,
+                  startCalendarDate: booking?.startCalendarDate || booking?.startDate
+                }
+              })
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to send booking_approved notification to driver', e);
+      }
       setTimeout(() => {
         if (isLiff()) window.liff.close();
       }, 1200);

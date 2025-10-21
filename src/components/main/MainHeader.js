@@ -18,7 +18,7 @@ export default function MainHeader({ userProfile, activeTab, setActiveTab }) {
   }, [pathname, setActiveTab]);
 
   return (
-    <div className="bg-gradient-to-b from-[#075b50] to-[#002629] px-6 pt-8 pb-24">
+    <div className="bg-gradient-to-b from-emerald-600 to-emerald-950 px-6 pt-8 pb-24">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full overflow-hidden border">
