@@ -22,6 +22,7 @@ export default function ConfirmBookingPage() {
   const [vehicle, setVehicle] = useState(null);
   const [requester, setRequester] = useState(null);
   const [message, setMessage] = useState('');
+  
   const [processing, setProcessing] = useState(false);
   // โหลดข้อมูลคนขับที่ถูกจองมา (ถ้ามี driverId)
   const [driver, setDriver] = useState(null);
@@ -82,62 +83,129 @@ export default function ConfirmBookingPage() {
   }, [bookingId]);
 
   function formatDateOnly(value) {
-    if (!value) return '-';
+    if (value === null || value === undefined || value === '') return '-';
     try {
-      let d;
-      // Prefer Firestore Timestamp-like startDateTime, otherwise accept calendar-only string
-      if (value.seconds) d = new Date(value.seconds * 1000);
-      else if (typeof value.toDate === 'function') d = value.toDate();
-      else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      let d = null;
+      // Firestore Timestamp-like object with toDate()
+      if (value && typeof value.toDate === 'function') {
+        d = value.toDate();
+      // Firestore-like plain object with seconds/nanoseconds
+      } else if (value && typeof value.seconds === 'number') {
+        const ms = (value.seconds * 1000) + Math.floor((value.nanoseconds || 0) / 1e6);
+        d = new Date(ms);
+      // ISO string or numeric timestamp
+      } else if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
         // calendar-only string: treat as local midnight
         const parts = value.split('-');
         d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0);
-      } else d = new Date(value);
-      if (isNaN(d.getTime())) return '-';
+      } else {
+        d = new Date(value);
+      }
+      if (!d || isNaN(d.getTime())) return '-';
       return d.toLocaleDateString('th-TH', { dateStyle: 'medium' });
     } catch (e) {
       return '-';
     }
   }
 
+  // derive displayable start/end values from canonical or legacy fields
+  const displayStart = booking ? (booking.startDateTime || booking.startCalendarDate || booking.startDate || booking.from) : null;
+  const displayEnd = booking ? (booking.endDateTime || booking.endCalendarDate || booking.endDate || booking.to) : null;
+
   const handleApprove = async () => {
     if (isFinalStatus) return;
     setProcessing(true);
     setMessage('กำลังอนุมัติ...');
-    try {
-      const bookingRef = doc(db, 'bookings', bookingId);
-      await updateDoc(bookingRef, { status: 'approved' });
-      setBooking((prev) => prev ? { ...prev, status: 'approved' } : prev);
-      setMessage('อนุมัติเรียบร้อยแล้ว');
-      // หลังอนุมัติ: แจ้งผู้ขับ (ถ้ามี) ว่ามีการมอบหมาย/อนุมัติ ให้ตรวจสอบการตั้งค่าการแจ้งเตือนก่อนส่ง
+    // If no driver assigned, attempt to auto-assign the requester when they are a driver
+    let assignedDriverId = booking?.driverId;
+    let assignedDriverName = booking?.driverName;
+    if (!assignedDriverId) {
       try {
-        if (driver && driver.lineId) {
-          // check notification settings
-          const settingsRes = await fetch('/api/notifications/settings');
-          const settings = await settingsRes.json().catch(() => ({}));
-          const roles = settings.roles || {};
-          const driverEnabled = typeof roles.driver?.booking_approved === 'boolean' ? roles.driver.booking_approved : true;
-          if (driverEnabled) {
-            await fetch('/api/notifications/send', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                event: 'booking_approved',
-                booking: {
-                  id: bookingId,
-                  requesterName: booking?.requesterName,
-                  userEmail: booking?.userEmail,
-                  vehicleLicensePlate: booking?.vehicleLicensePlate,
-                  // include canonical start fields so message builders can pick the best
-                  startDateTime: booking?.startDateTime,
-                  startCalendarDate: booking?.startCalendarDate || booking?.startDate
-                }
-              })
-            });
+        // If booking was created by a userId, try to fetch that user
+        if (booking?.userId) {
+          const uRef = doc(db, 'users', booking.userId);
+          const uSnap = await getDoc(uRef);
+          if (uSnap.exists()) {
+            const ud = uSnap.data();
+            if (ud.role === 'driver') {
+              assignedDriverId = uSnap.id;
+              assignedDriverName = ud.name || ud.displayName || ud.email || '';
+            }
+          }
+        }
+        // Otherwise, try lookup by email and restrict to drivers
+        if (!assignedDriverId && booking?.userEmail) {
+          const q = query(collection(db, 'users'), where('email', '==', booking.userEmail), where('role', '==', 'driver'));
+          const snaps = await getDocs(q);
+          if (!snaps.empty) {
+            const udoc = snaps.docs[0];
+            const ud = udoc.data();
+            assignedDriverId = udoc.id;
+            assignedDriverName = ud.name || ud.displayName || ud.email || '';
           }
         }
       } catch (e) {
-        console.warn('Failed to send booking_approved notification to driver', e);
+        console.warn('Auto-assign driver lookup failed', e);
+      }
+
+      if (!assignedDriverId) {
+        setMessage('กรุณามอบหมายคนขับก่อนการอนุมัติ เพื่อให้คนขับสามารถเห็นทริป');
+        setProcessing(false);
+        return;
+      }
+    }
+    try {
+      // Use batch write so we update booking and vehicle atomically (if vehicle assigned)
+      const batch = (await import('firebase/firestore')).writeBatch(db);
+      const bookingRef = doc(db, 'bookings', bookingId);
+      const bookingUpdate = { status: 'approved' };
+      if (assignedDriverId) {
+        bookingUpdate.driverId = assignedDriverId;
+        bookingUpdate.driverName = assignedDriverName;
+      }
+      batch.update(bookingRef, bookingUpdate);
+      if (booking?.vehicleId) {
+        const vehicleRef = doc(db, 'vehicles', booking.vehicleId);
+        batch.update(vehicleRef, { status: 'in_use' });
+      }
+      await batch.commit();
+  setBooking((prev) => prev ? { ...prev, status: 'approved', driverId: assignedDriverId, driverName: assignedDriverName } : prev);
+      setMessage('อนุมัติเรียบร้อยแล้ว');
+      // หลังอนุมัติ: แจ้งผู้ขับ (ถ้ามี) ว่ามีการมอบหมาย/อนุมัติ ให้ตรวจสอบการตั้งค่าการแจ้งเตือนก่อนส่ง
+        try {
+        // Always request server to send notifications; server will check settings and recipients
+        const notifResp = await fetch('/api/notifications/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'booking_approved',
+            booking: {
+              id: bookingId,
+              requesterName: booking?.requesterName,
+              userEmail: booking?.userEmail,
+              vehicleLicensePlate: booking?.vehicleLicensePlate,
+              driverId: booking?.driverId,
+              driverName: booking?.driverName,
+              vehicleId: booking?.vehicleId,
+              // canonical fields
+              startDateTime: booking?.startDateTime,
+              startCalendarDate: booking?.startCalendarDate || booking?.startDate,
+              endDateTime: booking?.endDateTime,
+              endCalendarDate: booking?.endCalendarDate || booking?.endDate
+            }
+          })
+        });
+        const notifJson = await notifResp.json().catch(() => null);
+        if (notifJson && notifJson.results) {
+          const r = notifJson.results;
+          const sent = (r.sent && r.sent.length) || 0;
+          const skipped = (r.skipped && r.skipped.length) || 0;
+          const errors = (r.errors && r.errors.length) || 0;
+          setMessage(`แจ้งเตือน: ส่ง ${sent} ข้าม ${skipped} ข้อผิดพลาด ${errors}`);
+          console.log('Notifications result:', notifJson);
+        }
+      } catch (e) {
+        console.warn('Failed to request booking_approved notifications', e);
       }
       setTimeout(() => {
         if (isLiff()) window.liff.close();
@@ -195,13 +263,13 @@ export default function ConfirmBookingPage() {
           <div className="space-y-4 mb-6">
             <div className="flex items-center gap-3">
               {requester && requester.imageUrl ? (
-                <Image src={requester.imageUrl} alt={requester.name || 'ผู้ขอ'} width={48} height={48} className="rounded-full object-cover border-2 border-green-700" unoptimized />
+                <Image src={requester.imageUrl} alt={requester.name || 'ผู้ขอ'} width={48} height={48} className="rounded-full object-cover border-2 border-[#075b50]" unoptimized />
               ) : (
                 <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-base font-bold text-green-800 border-2 border-green-300">U</div>
               )}
               <div>
-                <div className="font-semibold text-base text-green-900">{booking.requesterName || requester?.name || '-'}</div>
-                <div className="text-xs text-green-700">{requester?.position || ''}</div>
+                <div className="font-semibold text-base text-[#075b50]">{booking.requesterName || requester?.name || '-'}</div>
+                <div className="text-xs text-[#075b50]">{requester?.position || ''}</div>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -212,17 +280,17 @@ export default function ConfirmBookingPage() {
               )}
               <div className="ml-1 flex">
                 <div className="font-semibold text-green-800 text-sm">รถ:</div>
-                <div className="text-sm text-green-900">{booking.vehicleLicensePlate || vehicle?.licensePlate || booking.vehicleId || '-'}</div>
+                <div className="text-sm text-[#075b50]">{booking.vehicleLicensePlate || vehicle?.licensePlate || booking.vehicleId || '-'}</div>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div>
                 <div className="font-semibold text-green-800 text-sm">วันที่</div>
-                <div className="text-sm text-green-900">{booking.startDate && booking.endDate ? `${formatDateOnly(booking.startDate)} - ${formatDateOnly(booking.endDate)}` : '-'}</div>
+                <div className="text-sm text-[#075b50]">{displayStart ? `${formatDateOnly(displayStart)}${displayEnd ? ` - ${formatDateOnly(displayEnd)}` : ''}` : '-'}</div>
               </div>
               <div>
                 <div className="font-semibold text-green-800 text-sm">วัตถุประสงค์</div>
-                <div className="text-sm text-green-900">{booking.purpose || '-'}</div>
+                <div className="text-sm text-[#075b50]">{booking.purpose || '-'}</div>
               </div>
             </div>
             {booking.notes && (
@@ -232,7 +300,7 @@ export default function ConfirmBookingPage() {
             )}
           </div>
         ) : (
-          <div className="text-center text-green-700 py-6">กำลังโหลดข้อมูลการจอง...</div>
+          <div className="text-center text-[#075b50] py-6">กำลังโหลดข้อมูลการจอง...</div>
         )}
         {booking && (
           <>
@@ -241,14 +309,14 @@ export default function ConfirmBookingPage() {
               <button
                 onClick={() => { setConfirmAction('approve'); setShowConfirmModal(true); }}
                 disabled={processing || isFinalStatus}
-                className="w-1/2 px-4 py-2 text-base font-bold rounded-lg shadow bg-green-900 text-white hover:bg-green-800 transition disabled:opacity-60 border-2 border-green-900"
+                className="w-1/2 px-4 py-2 text-base font-bold rounded-lg shadow bg-[#075b50] text-white hover:bg-green-800 transition disabled:opacity-60 border-2 border-[#075b50]"
               >
                 ✅ อนุมัติ
               </button>
               <button
                 onClick={() => { setConfirmAction('reject'); setShowConfirmModal(true); }}
                 disabled={processing || isFinalStatus}
-                className="w-1/2 px-4 py-2 text-base font-bold rounded-lg shadow bg-white text-green-900 hover:bg-green-100 transition disabled:opacity-60 border-2 border-green-900"
+                className="w-1/2 px-4 py-2 text-base font-bold rounded-lg shadow bg-white text-[#075b50] hover:bg-green-100 transition disabled:opacity-60 border-2 border-[#075b50]"
               >
                 ❌ ปฏิเสธ
               </button>
@@ -257,7 +325,7 @@ export default function ConfirmBookingPage() {
             {showConfirmModal && (
               <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
                 <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm">
-                  <h2 className="text-lg font-bold mb-3 text-green-900">
+                  <h2 className="text-lg font-bold mb-3 text-[#075b50]">
                     {confirmAction === 'approve' ? 'ยืนยันการอนุมัติ' : 'ยืนยันการปฏิเสธ'}
                   </h2>
                   <div className="mb-4 text-gray-700 text-sm">
@@ -273,7 +341,7 @@ export default function ConfirmBookingPage() {
                         if (confirmAction === 'approve') handleApprove();
                         else handleReject();
                       }}
-                      className={`px-4 py-2 rounded ${confirmAction === 'approve' ? 'bg-green-700 text-white' : 'bg-red-600 text-white'}`}
+                      className={`px-4 py-2 rounded ${confirmAction === 'approve' ? 'bg-[#075b50] text-white' : 'bg-red-600 text-white'}`}
                     >
                       {confirmAction === 'approve' ? 'ยืนยันอนุมัติ' : 'ยืนยันปฏิเสธ'}
                     </button>
@@ -285,10 +353,11 @@ export default function ConfirmBookingPage() {
         )}
 
         {message && (
-          <div className="mt-4 text-center text-base font-semibold text-green-900 animate-pulse">{message}</div>
+          <div className="mt-4 text-center text-base font-semibold text-[#075b50] animate-pulse">{message}</div>
         )}
+        {/* Notification summary removed per UX request */}
         {isFinalStatus && (
-          <div className="mt-4 text-center text-base font-semibold text-green-700">{booking.status === 'approved' ? 'รายการนี้ได้รับการอนุมัติแล้ว' : 'รายการนี้ถูกปฏิเสธแล้ว'}</div>
+          <div className="mt-4 text-center text-base font-semibold text-[#075b50]">{booking.status === 'approved' ? 'รายการนี้ได้รับการอนุมัติแล้ว' : 'รายการนี้ถูกปฏิเสธแล้ว'}</div>
         )}
       </div>
     </div>

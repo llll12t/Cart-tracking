@@ -313,8 +313,11 @@ export default function ApprovalCard({ booking }) {
               requesterName: requesterNameState || booking.requesterName || booking.userEmail,
               vehicleLicensePlate: vehicle.licensePlate,
               driverName: driver.name,
-              startDate: booking.startDate,
-              endDate: booking.endDate
+              // include canonical fields for correct formatting in Flex builders
+              startDateTime: booking.startDateTime,
+              startCalendarDate: booking.startCalendarDate || booking.startDate,
+              endDateTime: booking.endDateTime,
+              endCalendarDate: booking.endCalendarDate || booking.endDate
             }
           })
         });

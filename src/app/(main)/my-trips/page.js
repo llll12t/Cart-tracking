@@ -134,19 +134,11 @@ function TripCard({ trip }) {
             const roles = settings.roles || {};
             const adminEnabled = typeof roles.admin?.vehicle_returned === 'boolean' ? roles.admin.vehicle_returned : true;
             if (adminEnabled) {
+                // send minimal booking id; server will fetch booking, expenses and build a full summary
                 await fetch('/api/notifications/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        event: 'vehicle_returned',
-                        booking: {
-                            id: trip.id,
-                            vehicleLicensePlate: trip.vehicleLicensePlate,
-                            driverId: trip.driverId,
-                            driverName: trip.driverName,
-                            endMileage: Number(endMileage)
-                        }
-                    })
+                    body: JSON.stringify({ event: 'vehicle_returned', booking: { id: trip.id } })
                 });
             } else {
                 console.debug('การแจ้งคืนรถสำหรับ admin ถูกปิดใน settings — ไม่ส่งแจ้งเตือน');

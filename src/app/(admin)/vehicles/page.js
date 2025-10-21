@@ -26,6 +26,8 @@ function VehicleList({ vehicles }) {
     switch (status) {
       case "available":
         return "พร้อมใช้งาน";
+       case "pending":
+        return "อยู่ระหว่างรออนุมัติ";
       case "in_use":
         return "กำลังถูกใช้งาน";
       case "on_trip":
