@@ -89,6 +89,35 @@ function TripCard({ trip }) {
         });
         
         await batch.commit();
+
+        // แจ้งแอดมินเมื่อคืนรถ
+        try {
+            // ตรวจสอบการตั้งค่าการแจ้งเตือนก่อนส่ง
+            const settingsRes = await fetch('/api/notifications/settings');
+            const settings = await settingsRes.json().catch(() => ({}));
+            const roles = settings.roles || {};
+            const adminEnabled = typeof roles.admin?.vehicle_returned === 'boolean' ? roles.admin.vehicle_returned : true;
+            if (adminEnabled) {
+                await fetch('/api/notifications/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        event: 'vehicle_returned',
+                        booking: {
+                            id: trip.id,
+                            vehicleLicensePlate: trip.vehicleLicensePlate,
+                            driverId: trip.driverId,
+                            driverName: trip.driverName,
+                            endMileage: Number(endMileage)
+                        }
+                    })
+                });
+            } else {
+                console.debug('การแจ้งคืนรถสำหรับ admin ถูกปิดใน settings — ไม่ส่งแจ้งเตือน');
+            }
+        } catch (e) {
+            console.warn('แจ้งแอดมินคืนรถไม่สำเร็จ', e);
+        }
     };
 
     const totalExpenses = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);

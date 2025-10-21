@@ -295,6 +295,27 @@ export default function ApprovalCard({ booking }) {
       await batch.commit();
       setShowModal(false);
 
+      // ส่ง Flex แจ้งลูกค้าเมื่ออนุมัติ
+      try {
+        await fetch('/api/notifications/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'booking_approved',
+            booking: {
+              id: booking.id,
+              requesterName: requesterNameState || booking.requesterName || booking.userEmail,
+              vehicleLicensePlate: vehicle.licensePlate,
+              driverName: driver.name,
+              startDate: booking.startDate,
+              endDate: booking.endDate
+            }
+          })
+        });
+      } catch (e) {
+        console.warn('ส่ง Flex แจ้งลูกค้าไม่สำเร็จ', e);
+      }
+
     } catch (error) {
       console.error("Error approving booking: ", error);
       alert("Failed to approve booking.");
