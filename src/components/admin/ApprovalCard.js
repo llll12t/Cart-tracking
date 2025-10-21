@@ -19,7 +19,7 @@ function AssignVehicleModal({ booking, onClose, onAssign }) {
   useEffect(() => {
     const fetchData = async () => {
       // Fetch available vehicles
-      const vehicleQuery = query(collection(db, "vehicles"), where("status", "==", "available"));
+      const vehicleQuery = query(collection(db, "vehicles"), where("status", "in", ["available", "pending"]));
       const vehicleSnapshot = await getDocs(vehicleQuery);
       const vehicles = vehicleSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       // If booking already has a vehicleId or vehicleLicensePlate, try to preselect it and move to front
@@ -118,12 +118,7 @@ function AssignVehicleModal({ booking, onClose, onAssign }) {
                       onClick={() => setSelectedVehicleId(v.id)}
                       className={`flex items-center gap-3 p-3 shadow-sm rounded-md cursor-pointer transition ${selectedVehicleId === v.id ? 'border-blue-600' : 'border-gray-200 hover:shadow-md'}`}
                     >
-                      {/* vehicle image */}
-                      {v.imageUrl ? (
-                        <Image src={v.imageUrl} alt={`${v.brand} ${v.model}`} width={80} height={56} className="object-cover rounded" unoptimized />
-                      ) : (
-                        <div className="w-20 h-14 bg-gray-100 rounded flex items-center justify-center text-sm text-gray-500">No Image</div>
-                      )}
+
                       <div className="text-sm">
                         <div className="font-medium">{v.brand} {v.model}</div>
                         <div className="text-xs text-gray-600">{v.licensePlate}</div>
@@ -273,6 +268,10 @@ export default function ApprovalCard({ booking }) {
   }, [booking.userId, booking.userEmail, requesterNameState]);
 
   const handleApprove = async (vehicle, driver) => {
+    if (!vehicle || !driver) {
+      alert("กรุณาเลือกรถและคนขับให้ครบก่อนอนุมัติ");
+      return;
+    }
     try {
       // Use a batch write to update multiple documents atomically
       const batch = writeBatch(db);
@@ -332,62 +331,55 @@ export default function ApprovalCard({ booking }) {
 
   return (
     <>
-      <div className="bg-white p-5 rounded-lg shadow-sm  hover:shadow-md transition">
-        <div className="flex items-start gap-4">
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-500">ผู้ขอ: <span className="font-medium text-gray-800">{requesterNameState || booking.requesterName || booking.userEmail}</span></p>
-                <h3 className="text-md font-bold text-gray-800 mt-1">
-                  {booking.driverName ? (
-                    `${booking.driverName} — ${booking.vehicleLicensePlate || booking.vehicleId || ''} — ${requesterNameState || booking.requesterName || booking.userEmail}`
-                  ) : (
-                    (booking.vehicleLicensePlate || booking.vehicleId) ? `${booking.vehicleLicensePlate || booking.vehicleId} — ${requesterNameState || booking.requesterName || booking.userEmail}` : (requesterNameState || booking.requesterName || booking.userEmail)
-                  )}
-                </h3>
-              </div>
-              <div className="text-right text-xs text-gray-600">
-                <div>สร้าง: {booking.createdAt ? new Date(booking.createdAt.seconds * 1000).toLocaleString('th-TH') : '-'}</div>
-                <div className="mt-1">ID: <span className="font-mono text-xs">{booking.id.substring(0,6)}</span></div>
-              </div>
-            </div>
-
-            <div className="mt-3 text-sm text-gray-600 space-y-2">
-              <div><strong>ต้นทาง:</strong> {booking.origin || '-'}</div>
-              <div><strong>ปลายทาง:</strong> {booking.destination || '-'}</div>
-              <div>
-                <strong>วันที่เริ่มต้น:</strong>{' '}
-                {booking.startDate || booking.startDateTime ? formatDateOnly(booking.startDate || booking.startDateTime) : '-'}
-              </div>
-              <div>
-                <strong>วันที่สิ้นสุด:</strong>{' '}
-                {booking.endDate || booking.endDateTime ? formatDateOnly(booking.endDate || booking.endDateTime) : '-'}
-              </div>
-              {/* จำนวนผู้โดยสาร และ ประเภทรถที่ต้องการ ถูกเอาออกตามคำขอ */}
-              <div><strong>รถที่เลือก/ทะเบียน:</strong> {booking.vehicleLicensePlate || booking.vehicleId || '-'}</div>
-              <div><strong>วัตถุประสงค์:</strong> <span className="text-gray-700">{booking.purpose || '-'}</span></div>
-              {booking.notes && <div><strong>หมายเหตุ:</strong> {booking.notes}</div>}
-
-              {/* validation issues (if any) */}
-              {booking.issues && booking.issues.length > 0 && (
-                <div className="mt-2">
-                  <strong className="text-red-600">ตรวจพบปัญหา:</strong>
-                  <ul className="list-disc list-inside text-sm text-red-600 mt-1">
-                    {booking.issues.map((it, idx) => <li key={idx}>{it}</li>)}
-                  </ul>
-                </div>
+      <div className="bg-white p-5 rounded-2xl shadow-md hover:shadow-lg transition">
+        <div className="flex flex-col gap-6 items-center">
+          {/* รูปรถและคนจอง */}
+          <div className="flex flex-row gap-4 items-center mb-2">
+            {booking.vehicleImageUrl ? (
+              <Image src={booking.vehicleImageUrl} alt="Vehicle" width={100} height={76} className="rounded-xl border object-cover bg-gray-50" unoptimized />
+            ) : (
+              <div className="w-28 h-20 bg-gray-100 rounded-xl flex items-center justify-center text-xs text-gray-500 border">ไม่มีรูป</div>
+            )}
+            {booking.requesterImageUrl ? (
+              <Image src={booking.requesterImageUrl} alt="Requester" width={56} height={56} className="rounded-full border object-cover bg-gray-50" unoptimized />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-teal-600 text-white flex items-center justify-center font-bold text-xl">{(requesterNameState || booking.requesterName || booking.userEmail || 'U')[0]}</div>
+            )}
+          </div>
+          <div className="w-full">
+            <p className="text-xs text-gray-500 mb-1">ผู้ขอ <span className="font-semibold text-gray-800">{requesterNameState || booking.requesterName || booking.userEmail}</span></p>
+            <h3 className="text-lg font-bold text-teal-700 mb-2">
+              {booking.driverName ? (
+                `${booking.driverName} — ${booking.vehicleLicensePlate || booking.vehicleId || ''}`
+              ) : (
+                booking.vehicleLicensePlate || booking.vehicleId || '-'
               )}
+            </h3>
+            <div className="text-xs text-gray-600 mb-1">สร้าง <span className="font-mono">{booking.createdAt ? new Date(booking.createdAt.seconds * 1000).toLocaleString('th-TH') : '-'}</span></div>
+            <div className="text-xs text-gray-600 mb-1">ID <span className="font-mono text-xs">{booking.id.substring(0,6)}</span></div>
+            <div className="space-y-1 text-sm text-gray-700 mt-2">
+              <div><span className="font-semibold">ต้นทาง:</span> {booking.origin || '-'}</div>
+              <div><span className="font-semibold">ปลายทาง:</span> {booking.destination || '-'}</div>
+              <div><span className="font-semibold">วันที่เริ่มต้น:</span> {booking.startDate || booking.startDateTime ? formatDateOnly(booking.startDate || booking.startDateTime) : '-'}</div>
+              <div><span className="font-semibold">วันที่สิ้นสุด:</span> {booking.endDate || booking.endDateTime ? formatDateOnly(booking.endDate || booking.endDateTime) : '-'}</div>
+              <div><span className="font-semibold">ทะเบียนรถ:</span> {booking.vehicleLicensePlate || booking.vehicleId || '-'}</div>
+              <div><span className="font-semibold">วัตถุประสงค์:</span> <span className="text-gray-600">{booking.purpose || '-'}</span></div>
+              {booking.notes && <div><span className="font-semibold">หมายเหตุ:</span> {booking.notes}</div>}
             </div>
+            {/* validation issues (if any) */}
+            {booking.issues && booking.issues.length > 0 && (
+              <div className="mt-3">
+                <strong className="text-red-600">ตรวจพบปัญหา:</strong>
+                <ul className="list-disc list-inside text-sm text-red-600 mt-1">
+                  {booking.issues.map((it, idx) => <li key={idx}>{it}</li>)}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
-
-        <div className="mt-4 pt-4 border-t flex justify-end gap-3">
-          <button onClick={handleDelete} className="px-3 py-2 text-sm font-medium text-white bg-gray-500 rounded-md hover:bg-gray-700">
-            ลบคำขอ
-          </button>
-          <button onClick={handleReject} className="px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
-            ปฏิเสธ
-          </button>
+        <div className="mt-6 pt-4 border-t flex flex-col md:flex-row justify-end gap-3">
+          <button onClick={handleDelete} className="px-4 py-2 text-sm font-semibold text-white bg-gray-500 rounded-lg hover:bg-gray-700 transition">ลบคำขอ</button>
+          <button onClick={handleReject} className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition">ปฏิเสธ</button>
           <button
             onClick={() => {
               if (!booking || booking.issues?.length > 0) {
@@ -396,21 +388,9 @@ export default function ApprovalCard({ booking }) {
               }
               setShowModal(true);
             }}
-            className="px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+            className="px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition"
           >
-            อนุมัติทันที (Admin)
-          </button>
-          <button onClick={() => {
-            const liffId = process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID || process.env.NEXT_PUBLIC_LIFF_ID;
-            if (liffId) {
-              const liffUrl = `https://liff.line.me/${liffId}?liff.state=/confirm/${booking.id}`;
-              window.open(liffUrl, '_blank');
-            } else {
-              const url = `/confirm/${booking.id}`;
-              window.open(url, '_blank');
-            }
-          }} className="px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
-            อนุมัติ (ผ่าน LIFF)
+            อนุมัติ
           </button>
         </div>
       </div>

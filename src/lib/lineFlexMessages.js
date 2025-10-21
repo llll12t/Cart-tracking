@@ -7,11 +7,11 @@ function fmtDate(d) {
     // Firestore Timestamp-like object with toDate()
     if (d && typeof d.toDate === 'function') {
       dt = d.toDate();
-    // Firestore plain object with seconds/nanoseconds
+      // Firestore plain object with seconds/nanoseconds
     } else if (d && typeof d.seconds === 'number') {
       const ms = (d.seconds * 1000) + Math.floor((d.nanoseconds || 0) / 1e6);
       dt = new Date(ms);
-    // numeric timestamp (seconds or milliseconds) or ISO string
+      // numeric timestamp (seconds or milliseconds) or ISO string
     } else if (typeof d === 'number') {
       // Heuristic: if it's seconds (10 digits), convert to ms
       dt = d > 1e12 ? new Date(d) : new Date(d * 1000);
@@ -19,9 +19,9 @@ function fmtDate(d) {
       dt = new Date(d);
     }
 
-  if (isNaN(dt.getTime())) return String(d);
-  // Show date only (Thai medium format), no time
-  return dt.toLocaleDateString('th-TH', { dateStyle: 'medium' });
+    if (isNaN(dt.getTime())) return String(d);
+    // Show date only (Thai medium format), no time
+    return dt.toLocaleDateString('th-TH', { dateStyle: 'medium' });
   } catch (e) {
     return String(d);
   }
@@ -54,11 +54,11 @@ function baseBubble(title, fields = [], footerText = '', actions = []) {
   if (actions && actions.length > 0) {
     bubble.footer = bubble.footer || { type: 'box', layout: 'vertical', contents: [] };
     const buttons = actions.map(action => ({
-        type: 'button',
-        action: { type: 'uri', label: action.label, uri: action.uri },
-        style: action.style || 'primary',
-        color: action.color,
-        height: 'sm'
+      type: 'button',
+      action: { type: 'uri', label: action.label, uri: action.uri },
+      style: action.style || 'primary',
+      color: action.color,
+      height: 'sm'
     }));
     bubble.footer.contents.push({
       type: 'box',
@@ -87,7 +87,7 @@ export function bookingCreatedAdmin(booking) {
     // Use liff.state to open the LIFF app and navigate to the confirm page for the booking
     const detailUri = `https://liff.line.me/${process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID}?liff.state=/confirm/${bookingId}`;
 
-    actions.push({ uri: detailUri, label: 'ยืนยันการจอง', style: 'primary', color: '#0ea5e9' });
+    actions.push({ uri: detailUri, label: 'ยืนยันการจอง', style: 'primary', color: '#06574d' });
   }
 
   return { altText: `คำขอจองรถจาก ${booking.requesterName || ''}`, contents: baseBubble(title, fields, '', actions) };
@@ -106,7 +106,7 @@ export function bookingApprovalRequestAdmin(booking) {
   if (confirmLiffId && bookingId) {
     // Use liff.state so LIFF opens and navigates to the confirm page with bookingId
     const detailUri = `https://liff.line.me/${process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID}?liff.state=/confirm/${bookingId}`;
-    actions.push({ uri: detailUri, label: 'ตรวจสอบและอนุมัติ', style: 'primary', color: '#0ea5e9' });
+    actions.push({ uri: detailUri, label: 'ตรวจสอบและอนุมัติ', style: 'primary', color: '#06574d' });
   }
   return { altText: `ขออนุมัติการจองจาก ${booking.requesterName || ''}`, contents: baseBubble(title, fields, '', actions) };
 }

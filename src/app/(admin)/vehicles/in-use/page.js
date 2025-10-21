@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, onSnapshot, doc, getDoc, getDocs } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, getDoc, getDocs, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Link from "next/link";
 import Image from 'next/image';
@@ -43,11 +43,11 @@ export default function VehiclesInUsePage() {
           const bq = query(
             collection(db, 'bookings'),
             where('vehicleId', '==', data.id),
-            where('status', 'in', ['on_trip', 'in_use'])
+            orderBy('createdAt', 'desc')
           );
           const bsnap = await getDocs(bq);
           if (!bsnap.empty) {
-            const bdoc = bsnap.docs[0];
+            const bdoc = bsnap.docs[0]; // booking ล่าสุด
             const booking = { id: bdoc.id, ...bdoc.data() };
             // fetch requester info
             if (booking.userId) {
@@ -130,9 +130,15 @@ export default function VehiclesInUsePage() {
               {v.booking && (
                 <div className="bg-gray-50 border border-gray-100 rounded p-3 text-sm">
                   <div className="font-medium text-sm mb-1">รายละเอียดการเดินทาง</div>
-                  <div className="text-xs text-gray-600">ผู้จอง: {v.booking.requester?.name || v.booking.requester?.email || 'ไม่ระบุ'}</div>
-                  <div className="text-xs text-gray-600">ต้นทาง → ปลายทาง: {v.booking.origin || '-'} → {v.booking.destination || '-'}</div>
-                  <div className="text-xs text-gray-600">วันเริ่ม: {v.booking.startDateTime ? new Date(v.booking.startDateTime.seconds * 1000).toLocaleString('th-TH') : '-'}</div>
+                  <div className="text-xs text-gray-600">ผู้จอง: {v.booking.requester?.name || v.booking.requester?.email || v.booking.userEmail || v.booking.userId || 'ไม่ระบุ'}</div>
+                  <div className="text-xs text-gray-600">ต้นทาง: {v.booking.origin || '-'}</div>
+                  <div className="text-xs text-gray-600">ปลายทาง: {v.booking.destination || '-'}</div>
+                  <div className="text-xs text-gray-600">วัตถุประสงค์: {v.booking.purpose || '-'}</div>
+                  <div className="text-xs text-gray-600">วันเริ่ม: {v.booking.startDateTime ? new Date(v.booking.startDateTime.seconds * 1000).toLocaleString('th-TH') : v.booking.startDate ? new Date(v.booking.startDate.seconds ? v.booking.startDate.seconds * 1000 : v.booking.startDate).toLocaleString('th-TH') : '-'}</div>
+                  <div className="text-xs text-gray-600">วันสิ้นสุด: {v.booking.endDateTime ? new Date(v.booking.endDateTime.seconds * 1000).toLocaleString('th-TH') : v.booking.endDate ? new Date(v.booking.endDate.seconds ? v.booking.endDate.seconds * 1000 : v.booking.endDate).toLocaleString('th-TH') : '-'}</div>
+                  <div className="text-xs text-gray-600">ทะเบียนรถ: {v.booking.vehicleLicensePlate || v.booking.vehicleId || '-'}</div>
+                  <div className="text-xs text-gray-600">คนขับ: {v.booking.driverName || v.booking.driverId || '-'}</div>
+                  {v.booking.notes && <div className="text-xs text-gray-600">หมายเหตุ: {v.booking.notes}</div>}
                 </div>
               )}
 

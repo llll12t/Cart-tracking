@@ -20,7 +20,7 @@ export default function ConfirmIndex() {
       // if contains nested liff.state=, extract
       const nested = s.match(/liff\.state=([^&]+)/);
       if (nested && nested[1]) {
-        try { s = decodeURIComponent(nested[1]); } catch (e) {}
+        try { s = decodeURIComponent(nested[1]); } catch (e) { }
       }
 
       // strip query part

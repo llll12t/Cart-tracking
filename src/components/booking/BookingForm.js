@@ -22,6 +22,8 @@ export default function BookingForm() {
   const FIXED_ORIGIN = 'บริษัท';
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [isMileageEditing, setIsMileageEditing] = useState(false);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -29,12 +31,37 @@ export default function BookingForm() {
 
   // ดึงรายการรถที่พร้อมใช้งาน
   useEffect(() => {
+    // ดึงรถที่ status == 'available' เท่านั้น (ไม่รวม booked/pending)
     const q = query(collection(db, "vehicles"), where("status", "==", "available"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const vehiclesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setVehicles(vehiclesData);
+    let unsubVehicles = null;
+    let unsubBookings = null;
+    let allVehicles = [];
+    let bookedVehicleIds = new Set();
+
+    // ดึง bookings ที่ยังไม่จบ (pending, approved, on_trip)
+    unsubBookings = onSnapshot(
+      query(collection(db, "bookings"), where("status", "in", ["pending", "approved", "on_trip"])),
+      (snapshot) => {
+        bookedVehicleIds = new Set(snapshot.docs.map(doc => doc.data().vehicleId));
+        // หลังจากได้ bookings แล้ว ให้ filter vehicles อีกที
+        if (allVehicles.length > 0) {
+          setVehicles(allVehicles.filter(v => !bookedVehicleIds.has(v.id)));
+        }
+      }
+    );
+
+    unsubVehicles = onSnapshot(q, (snapshot) => {
+      allVehicles = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(v => v.status === 'available');
+      // filter ซ้ำ: ไม่เอารถที่ถูกจองแล้ว
+      setVehicles(allVehicles.filter(v => !bookedVehicleIds.has(v.id)));
     });
-    return unsubscribe;
+
+    return () => {
+      if (unsubVehicles) unsubVehicles();
+      if (unsubBookings) unsubBookings();
+    };
   }, []);
 
   // close dropdown on outside click (container wraps button + list)
@@ -97,6 +124,14 @@ export default function BookingForm() {
 
       const docRef = await addDoc(collection(db, "bookings"), bookingData);
       const bookingId = docRef.id;
+
+        // อัปเดตสถานะรถเป็น pending ทันทีหลังจอง
+        try {
+          const { doc, updateDoc } = await import("firebase/firestore");
+          await updateDoc(doc(db, "vehicles", selectedVehicle), { status: "pending" });
+        } catch (e) {
+          console.warn("อัปเดตสถานะรถไม่สำเร็จ", e);
+        }
 
       setMessage("ส่งคำขอจองรถสำเร็จ!");
       // Reset form
@@ -255,30 +290,44 @@ export default function BookingForm() {
         </div>
 
         {/* กำหนดการ (วันที่เริ่ม - วันที่สิ้นสุด) */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-teal-700 mb-1">วันที่เริ่ม</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-              required
-            />
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-1/2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                required
+              />
+              <input
+                type="time"
+                value={startTime || ''}
+                onChange={e => setStartTime(e.target.value)}
+                className="w-1/2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                required
+              />
+            </div>
           </div>
-        </div>
-        {/* กำหนดการ (วันที่เริ่ม - วันที่สิ้นสุด) */}
-        <div className="grid grid-cols-2 gap-4">
-
           <div>
             <label className="block text-sm font-medium text-teal-700 mb-1">วันที่สิ้นสุด</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-              required
-            />
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-1/2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                required
+              />
+              <input
+                type="time"
+                value={endTime || ''}
+                onChange={e => setEndTime(e.target.value)}
+                className="w-1/2 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                required
+              />
+            </div>
           </div>
         </div>
 

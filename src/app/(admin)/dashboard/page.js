@@ -50,15 +50,29 @@ export default function AdminDashboardPage() {
 
     useEffect(() => {
         // ดึงข้อมูลสรุปสถานะรถ
+        let availableCount = 0;
+        let pendingVehicleIds = new Set();
         const vehiclesQuery = query(collection(db, "vehicles"));
-        const unsubVehicles = onSnapshot(vehiclesQuery, (snapshot) => {
+        const bookingsQuery = query(collection(db, "bookings"), where("status", "==", "pending"));
+        let unsubVehicles = null;
+        let unsubBookings = null;
+
+        unsubBookings = onSnapshot(bookingsQuery, (snapshot) => {
+            pendingVehicleIds = new Set(snapshot.docs.map(doc => doc.data().vehicleId));
+            setStats(prev => ({ ...prev, pending: snapshot.size }));
+            // trigger vehicles update if already loaded
+            if (unsubVehicles && typeof unsubVehicles.triggerUpdate === 'function') unsubVehicles.triggerUpdate();
+        });
+
+        unsubVehicles = onSnapshot(vehiclesQuery, (snapshot) => {
             let available = 0, inUse = 0, maintenance = 0;
             let taxAlerts = [], insuranceAlerts = [];
             const thirtyDaysFromNow = Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
 
             snapshot.docs.forEach(doc => {
                 const vehicle = { id: doc.id, ...doc.data() };
-                if (vehicle.status === 'available') available++;
+                // ถ้ารถว่างและไม่ได้อยู่ใน pending booking ให้ available++
+                if (vehicle.status === 'available' && !pendingVehicleIds.has(vehicle.id)) available++;
                 else if (vehicle.status === 'in_use' || vehicle.status === 'on_trip') inUse++;
                 else if (vehicle.status === 'maintenance') maintenance++;
 
@@ -70,16 +84,10 @@ export default function AdminDashboardPage() {
             setAlerts({ tax: taxAlerts, insurance: insuranceAlerts });
         });
 
-        // ดึงจำนวนคำขอที่รอดำเนินการ
-        const bookingsQuery = query(collection(db, "bookings"), where("status", "==", "pending"));
-        const unsubBookings = onSnapshot(bookingsQuery, (snapshot) => {
-            setStats(prev => ({ ...prev, pending: snapshot.size }));
-        });
         setLoading(false);
-
         return () => {
-            unsubVehicles();
-            unsubBookings();
+            if (unsubVehicles) unsubVehicles();
+            if (unsubBookings) unsubBookings();
         };
     }, []);
 
