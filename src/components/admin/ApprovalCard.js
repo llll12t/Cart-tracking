@@ -292,7 +292,7 @@ export default function ApprovalCard({ booking }) {
       batch.update(vehicleRef, {
         status: "in_use"
       });
-      
+
       await batch.commit();
       setShowModal(false);
 
@@ -388,6 +388,18 @@ export default function ApprovalCard({ booking }) {
           <button onClick={handleReject} className="px-3 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
             ปฏิเสธ
           </button>
+          <button
+            onClick={() => {
+              if (!booking || booking.issues?.length > 0) {
+                alert('ไม่สามารถอนุมัติได้ เนื่องจากข้อมูลไม่ครบหรือมีปัญหา');
+                return;
+              }
+              setShowModal(true);
+            }}
+            className="px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+          >
+            อนุมัติทันที (Admin)
+          </button>
           <button onClick={() => {
             const liffId = process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID || process.env.NEXT_PUBLIC_LIFF_ID;
             if (liffId) {
@@ -397,12 +409,18 @@ export default function ApprovalCard({ booking }) {
               const url = `/confirm/${booking.id}`;
               window.open(url, '_blank');
             }
-          }} className="px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700">
+          }} className="px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
             อนุมัติ (ผ่าน LIFF)
           </button>
         </div>
       </div>
-  {/* AssignVehicleModal intentionally no longer opened from this card; approval now handled via LIFF confirm page */}
+  {showModal && (
+    <AssignVehicleModal
+      booking={booking}
+      onClose={() => setShowModal(false)}
+      onAssign={handleApprove}
+    />
+  )}
     </>
   );
 }

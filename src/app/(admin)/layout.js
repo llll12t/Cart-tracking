@@ -1,16 +1,24 @@
 "use client";
 
+
 import { useAuth } from "@/context/AuthContext";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import AdminHeader from "@/components/admin/AdminHeader";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 // Layout หลักสำหรับหน้าจัดการทั้งหมด
 export default function AdminLayout({ children }) {
-  const { loading } = useAuth(); // เราไม่ได้ใช้ userProfile ที่นี่แล้ว
+  const { loading, userProfile } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const router = useRouter();
 
-  // แสดงสถานะ Loading ขณะรอตรวจสอบข้อมูลผู้ใช้
+  useEffect(() => {
+    if (!loading && !userProfile) {
+      router.replace("/");
+    }
+  }, [loading, userProfile, router]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -19,7 +27,10 @@ export default function AdminLayout({ children }) {
     );
   }
 
-  // ไม่มีการตรวจสอบ role แล้ว ทุกคนที่ login สามารถเห็นหน้านี้ได้
+  if (!userProfile) {
+    return null; // หรือแสดง loading/redirecting
+  }
+
   return (
     <div className="flex">
       <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />

@@ -30,7 +30,7 @@ export default function AdminHeader({ onMenuClick }) {
         ) : (
           <div className="w-10 h-10 rounded-full bg-teal-600 text-white flex items-center justify-center font-semibold">{userProfile?.name?.charAt(0) || 'U'}</div>
         )}
-        <button onClick={logout} className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm">Logout</button>
+  <button onClick={() => { logout(); window.location.reload(); }} className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm">Logout</button>
       </div>
     </header>
   );

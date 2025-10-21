@@ -23,40 +23,40 @@ export const AuthProvider = ({ children }) => {
         console.log(`Attempting to find user profile with UID: ${firebaseUser.uid}`);
         // -----------------------
 
-        const userDocRef = doc(db, "users", firebaseUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          console.log("User document found with UID:", firebaseUser.uid);
-          setUserProfile({ uid: userDocSnap.id, ...userDocSnap.data() });
-        } else {
-          console.error(`CRITICAL: No user document found for authenticated UID: ${firebaseUser.uid}. This should not happen in a correct custom token flow.`);
-          
-          let lineId = null;
-          if (firebaseUser.providerData && firebaseUser.providerData.length > 0) {
-            const lineProvider = firebaseUser.providerData.find(p => p.providerId === 'line.me');
-            if (lineProvider) {
-              lineId = lineProvider.uid;
-            }
-          }
-          
-          if (lineId) {
-            console.log("Fallback initiated: Attempting to find user by lineId:", lineId);
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, where('lineId', '==', lineId));
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-              const userDoc = querySnapshot.docs[0];
-              console.log("Fallback successful. Found user doc via lineId:", userDoc.id);
-              setUserProfile({ uid: userDoc.id, ...userDoc.data() });
-            } else {
-              console.error("Fallback failed: No user found with lineId:", lineId);
+        // ใช้ email ใน firebaseUser แทน UID (เหมือน payment flow)
+        let userEmail = firebaseUser.email;
+        if (!userEmail && firebaseUser.providerData && firebaseUser.providerData.length > 0) {
+          userEmail = firebaseUser.providerData[0].email;
+        }
+        if (userEmail) {
+          const usersRef = collection(db, 'users');
+          const q = query(usersRef, where('email', '==', userEmail));
+          const querySnapshot = await getDocs(q);
+          if (!querySnapshot.empty) {
+            const userDoc = querySnapshot.docs[0];
+            console.log("User document found with email:", userEmail);
+            setUserProfile({ uid: userDoc.id, ...userDoc.data() });
+          } else {
+            // ถ้าไม่พบ user document ให้สร้างใหม่อัตโนมัติ
+            try {
+              const newUser = {
+                email: userEmail,
+                name: firebaseUser.displayName || userEmail.split('@')[0],
+                role: 'admin', // หรือกำหนด logic อื่นตามต้องการ
+                createdAt: new Date(),
+              };
+              const usersRef = collection(db, 'users');
+              const docRef = await (await import('firebase/firestore')).addDoc(usersRef, newUser);
+              setUserProfile({ uid: docRef.id, ...newUser });
+              console.log('Created new user document for', userEmail);
+            } catch (err) {
+              console.error('Failed to auto-create user document:', err);
               setUserProfile(null);
             }
-          } else {
-             console.error("Fallback failed: Could not determine lineId from the firebaseUser object.");
-             setUserProfile(null);
           }
+        } else {
+          console.error("No email found in firebaseUser. Cannot query user profile.");
+          setUserProfile(null);
         }
       } else {
         console.log("No firebaseUser found, logging out.");
