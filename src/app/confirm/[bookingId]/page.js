@@ -3,17 +3,15 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import useLiff from '@/hooks/useLiff';
-import Image from 'next/image';
+
+import { useParams } from 'next/navigation';
+import { doc, getDoc, query, collection, where, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
+import Image from 'next/image';
 
 export default function ConfirmBookingPage() {
-  const router = useRouter();
   const params = useParams();
   const bookingId = params?.bookingId;
-  const { liff, profile, loading: liffLoading, error: liffError } = useLiff(process.env.NEXT_PUBLIC_CONFIRM_LIFF_ID);
   const [booking, setBooking] = useState(null);
   const [vehicle, setVehicle] = useState(null);
   const [requester, setRequester] = useState(null);
@@ -35,9 +33,7 @@ export default function ConfirmBookingPage() {
               const vSnap = await getDoc(vRef);
               if (vSnap.exists()) setVehicle({ id: vSnap.id, ...vSnap.data() });
             }
-          } catch (e) {
-            // ignore
-          }
+          } catch (e) {}
           try {
             if (bk.userId) {
               const uRef = doc(db, 'users', bk.userId);
@@ -48,9 +44,7 @@ export default function ConfirmBookingPage() {
               const snaps = await getDocs(q);
               if (!snaps.empty) setRequester({ id: snaps.docs[0].id, ...snaps.docs[0].data() });
             }
-          } catch (e) {
-            // ignore
-          }
+          } catch (e) {}
         } else {
           setBooking(null);
         }
@@ -65,9 +59,7 @@ export default function ConfirmBookingPage() {
     if (!value) return '-';
     try {
       let d;
-      // Firestore timestamp
       if (value.seconds) d = new Date(value.seconds * 1000);
-      // Firestore Timestamp with toDate
       else if (typeof value.toDate === 'function') d = value.toDate();
       else d = new Date(value);
       if (isNaN(d.getTime())) return '-';
@@ -77,120 +69,98 @@ export default function ConfirmBookingPage() {
     }
   }
 
-  const handleAction = async (action) => {
+  const handleApprove = async () => {
     setProcessing(true);
-    setMessage(`กำลัง${action === 'approve' ? 'อนุมัติ' : 'ปฏิเสธ'}...`);
+    setMessage('กำลังอนุมัติ...');
     try {
-      if (!liff) {
-        setMessage('LIFF ไม่พร้อม กรุณาเปิดหน้าในแอป LINE');
-        setProcessing(false);
-        return;
-      }
-      if (typeof liff.isLoggedIn !== 'function' || !liff.isLoggedIn()) {
-        setMessage('LIFF ยังไม่พร้อมหรือไม่ได้เปิดในแอป LINE');
-        setProcessing(false);
-        return;
-      }
-      const idToken = typeof liff.getIDToken === 'function' ? liff.getIDToken() : null;
-      if (!idToken) {
-        setMessage('ไม่พบ idToken จาก LIFF');
-        setProcessing(false);
-        return;
-      }
-      const res = await fetch(`/api/bookings/${bookingId}/${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken })
-      });
-      const data = await res.json();
-      if (res.ok && data.ok) {
-        setMessage(`${action === 'approve' ? 'อนุมัติ' : 'ปฏิเสธ'}เรียบร้อย`);
-        // Attempt to close LIFF window (robust fallback)
-        try {
-          if (liff && typeof liff.closeWindow === 'function') {
-            // Give UI a moment to show success message, then close
-            setTimeout(() => {
-              try { liff.closeWindow(); } catch (e) { console.warn('liff.closeWindow() failed', e); try { window.close(); } catch(_) { window.history.back(); } }
-            }, 800);
-          } else {
-            // Not a LIFF environment; try to close the window or go back
-            setTimeout(() => {
-              try { window.close(); } catch (e) { window.history.back(); }
-            }, 800);
-          }
-        } catch (e) {
-          console.warn('Error while attempting to close LIFF/window', e);
-        }
-      } else {
-        setMessage(`ไม่สามารถดำเนินการได้: ${data.error || ''}`);
-      }
-    } catch (err) {
-      console.error(err);
-      setMessage('เกิดข้อผิดพลาดในการดำเนินการ');
+      const bookingRef = doc(db, 'bookings', bookingId);
+      await updateDoc(bookingRef, { status: 'approved' });
+      setMessage('อนุมัติเรียบร้อยแล้ว');
+    } catch (e) {
+      setMessage('เกิดข้อผิดพลาดในการอนุมัติ');
     }
     setProcessing(false);
   };
 
-  if (liffLoading) return <div>กำลังโหลด...</div>;
-  if (liffError) return <div>เกิดข้อผิดพลาดในการโหลด LIFF: {liffError}</div>
+  const handleReject = async () => {
+    setProcessing(true);
+    setMessage('กำลังปฏิเสธ...');
+    try {
+      const bookingRef = doc(db, 'bookings', bookingId);
+      await updateDoc(bookingRef, { status: 'rejected' });
+      setMessage('ปฏิเสธเรียบร้อยแล้ว');
+    } catch (e) {
+      setMessage('เกิดข้อผิดพลาดในการปฏิเสธ');
+    }
+    setProcessing(false);
+  };
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
-      {/* LIFF diagnostics panel for debugging */}
-      <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm">
-        <div><strong>LIFF diagnostics:</strong></div>
-        <div>isInClient: {liff && typeof liff.isInClient === 'function' ? String(liff.isInClient()) : 'n/a'}</div>
-        <div>isLoggedIn: {liff && typeof liff.isLoggedIn === 'function' ? String(liff.isLoggedIn()) : 'n/a'}</div>
-        <div>has getIDToken: {liff && typeof liff.getIDToken === 'function' ? 'yes' : 'no'}</div>
-        <div>profile: {profile ? (profile.displayName || profile.userId || JSON.stringify(profile)) : 'none'}</div>
-      </div>
-      <h1 className="text-2xl font-bold mb-4">รายละเอียดการจอง</h1>
-      <div className="bg-white p-6 rounded shadow">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50 to-blue-100 py-8 px-2">
+      <div className="w-full max-w-xl bg-white rounded-2xl shadow-xl p-6 md:p-10">
+        <h1 className="text-3xl font-extrabold text-teal-700 mb-6 text-center tracking-tight">ยืนยันการจองรถ</h1>
         {booking ? (
-          <div className="space-y-2 mb-6">
-            <div className="flex items-center gap-3">
+          <div className="space-y-6 mb-8">
+            <div className="flex items-center gap-4">
               {requester && requester.imageUrl ? (
-                <Image src={requester.imageUrl} alt={requester.name || 'ผู้ขอ'} width={56} height={56} className="rounded-full object-cover" unoptimized />
+                <Image src={requester.imageUrl} alt={requester.name || 'ผู้ขอ'} width={64} height={64} className="rounded-full object-cover border-2 border-teal-400" unoptimized />
               ) : (
-                <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center text-sm">U</div>
+                <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center text-lg font-bold text-teal-600 border-2 border-teal-200">U</div>
               )}
               <div>
-                <div><span className="font-semibold">ผู้ขอ:</span> {booking.requesterName || requester?.name || '-'}</div>
+                <div className="font-semibold text-lg text-gray-800">{booking.requesterName || requester?.name || '-'}</div>
                 <div className="text-xs text-gray-500">{requester?.position || ''}</div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               {vehicle && vehicle.imageUrl ? (
-                <Image src={vehicle.imageUrl} alt={`${vehicle.brand || ''} ${vehicle.model || ''}`} width={120} height={80} className="object-cover rounded" unoptimized />
+                <Image src={vehicle.imageUrl} alt={`${vehicle.brand || ''} ${vehicle.model || ''}`} width={140} height={90} className="object-cover rounded-lg border border-gray-200" unoptimized />
               ) : (
-                <div className="w-28 h-20 bg-gray-100 rounded flex items-center justify-center text-sm text-gray-500">No Image</div>
+                <div className="w-36 h-24 bg-gray-100 rounded-lg flex items-center justify-center text-base text-gray-400 border border-gray-200">No Image</div>
               )}
-              <div><span className="font-semibold">รถ:</span> {booking.vehicleLicensePlate || vehicle?.licensePlate || booking.vehicleId || '-'}</div>
+              <div className="ml-2">
+                <div className="font-semibold text-gray-700">รถ:</div>
+                <div className="text-base text-gray-800">{booking.vehicleLicensePlate || vehicle?.licensePlate || booking.vehicleId || '-'}</div>
+              </div>
             </div>
-            <div><span className="font-semibold">วันที่:</span> {booking.startDate && booking.endDate ? `${formatDateOnly(booking.startDate)} - ${formatDateOnly(booking.endDate)}` : '-'}</div>
-            <div><span className="font-semibold">วัตถุประสงค์:</span> {booking.purpose}</div>
-            <div><span className="font-semibold">หมายเหตุ:</span> {booking.notes}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="font-semibold text-gray-700">วันที่</div>
+                <div className="text-base text-gray-800">{booking.startDate && booking.endDate ? `${formatDateOnly(booking.startDate)} - ${formatDateOnly(booking.endDate)}` : '-'}</div>
+              </div>
+              <div>
+                <div className="font-semibold text-gray-700">วัตถุประสงค์</div>
+                <div className="text-base text-gray-800">{booking.purpose || '-'}</div>
+              </div>
+            </div>
+            {booking.notes && (
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded text-yellow-800 text-sm">
+                <span className="font-semibold">หมายเหตุ:</span> {booking.notes}
+              </div>
+            )}
           </div>
         ) : (
-          <div>กำลังโหลดข้อมูลการจอง...</div>
+          <div className="text-center text-gray-500 py-8">กำลังโหลดข้อมูลการจอง...</div>
         )}
-        <div className="flex gap-4">
+        <div className="flex flex-col md:flex-row gap-4 justify-center">
           <button
-            onClick={() => handleAction('approve')}
+            onClick={handleApprove}
             disabled={processing}
-            className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-60"
+            className="flex-1 px-6 py-3 text-lg font-bold rounded-lg shadow-sm bg-gradient-to-r from-teal-500 to-green-500 text-white hover:from-teal-600 hover:to-green-600 transition disabled:opacity-60"
           >
-            อนุมัติ
+            ✅ อนุมัติ
           </button>
           <button
-            onClick={() => handleAction('reject')}
+            onClick={handleReject}
             disabled={processing}
-            className="px-4 py-2 bg-red-600 text-white rounded disabled:opacity-60"
+            className="flex-1 px-6 py-3 text-lg font-bold rounded-lg shadow-sm bg-gradient-to-r from-red-500 to-pink-500 text-white hover:from-red-600 hover:to-pink-600 transition disabled:opacity-60"
           >
-            ปฏิเสธ
+            ❌ ปฏิเสธ
           </button>
         </div>
-        {message && <p className="mt-3 text-sm">{message}</p>}
+        {message && (
+          <div className="mt-6 text-center text-lg font-semibold text-blue-700 animate-pulse">{message}</div>
+        )}
       </div>
     </div>
   );
