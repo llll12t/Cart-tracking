@@ -228,7 +228,7 @@ export default function VehiclesPage() {
       <div className="flex items-center mb-6">
         <Link
           href="/vehicles/add"
-          className="px-4 py-2 font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+          className="px-4 py-2 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700"
         >
           + เพิ่มรถใหม่
         </Link>

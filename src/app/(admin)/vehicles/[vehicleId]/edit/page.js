@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import Image from 'next/image';
 import { useRouter, useParams } from "next/navigation";
-import { db } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export default function EditVehiclePage() {
   const router = useRouter();
@@ -45,11 +46,11 @@ export default function EditVehiclePage() {
         const toInputDate = (d) => {
           if (!d) return "";
           // Firestore Timestamp -> JS Date
-          if (d.seconds && typeof d.seconds === 'number') return new Date(d.seconds * 1000).toISOString().slice(0,10);
+          if (d.seconds && typeof d.seconds === 'number') return new Date(d.seconds * 1000).toISOString().slice(0, 10);
           // JS Date
-          if (d.toDate) return d.toDate().toISOString().slice(0,10);
+          if (d.toDate) return d.toDate().toISOString().slice(0, 10);
           // string
-          try { return new Date(d).toISOString().slice(0,10); } catch (e) { return ""; }
+          try { return new Date(d).toISOString().slice(0, 10); } catch (e) { return ""; }
         };
 
         setForm({
@@ -112,6 +113,12 @@ export default function EditVehiclePage() {
     setMessage("");
     try {
       let imageUrl = form.imageUrl;
+      // If the user selected a local file, upload it to Firebase Storage and get the download URL
+      if (imageFile) {
+        const storageRef = ref(storage, `vehicle_images/${imageFile.name}_${Date.now()}`);
+        const snapshot = await uploadBytes(storageRef, imageFile);
+        imageUrl = await getDownloadURL(snapshot.ref);
+      }
       const docRef = doc(db, "vehicles", vehicleId);
       await updateDoc(docRef, {
         brand: form.brand,
@@ -127,6 +134,8 @@ export default function EditVehiclePage() {
         taxDueDate: form.taxDueDate ? new Date(form.taxDueDate) : null,
         insuranceExpireDate: form.insuranceExpireDate ? new Date(form.insuranceExpireDate) : null
       });
+      // clear selected local file after successful upload
+      setImageFile(null);
       setMessage("บันทึกข้อมูลรถสำเร็จ!");
       setTimeout(() => router.push(`/vehicles`), 1200);
     } catch (err) {
@@ -177,7 +186,15 @@ export default function EditVehiclePage() {
               </div>
               <div>
                 <label className="block mb-1 text-sm font-medium">ประเภท</label>
-                <input name="type" value={form.type} onChange={handleChange} className="w-full p-3 border rounded-md" />
+                <select name="type" value={form.type} onChange={handleChange} className="w-full p-3 border rounded-md">
+                  <option value="">-- เลือกประเภท --</option>
+                  <option value="รถเก๋ง">รถเก๋ง</option>
+                  <option value="รถกระบะ">รถกระบะ</option>
+                  <option value="รถตู้">รถตู้</option>
+                  <option value="รถบรรทุก">รถบรรทุก</option>
+                  <option value="มอเตอร์ไซค์">มอเตอร์ไซค์</option>
+                  <option value="อื่นๆ">อื่นๆ</option>
+                </select>
               </div>
             </div>
 
@@ -214,43 +231,31 @@ export default function EditVehiclePage() {
             <div className="w-full">
               <label className="block mb-2 text-sm font-medium">รูปรถ</label>
               <div className="w-full bg-gray-50 rounded-lg border p-3 flex items-center justify-center">
-                  {form.imageUrl ? (
-                    !imageBroken ? (
-                      <Image
-                        src={form.imageUrl}
-                        alt="Vehicle"
-                        width={600}
-                        height={220}
-                        className="w-full h-44 object-cover rounded"
-                        unoptimized
-                        onError={() => setImageBroken(true)}
-                      />
-                    ) : (
-                      // fallback to native img when Next/Image fails (works for blob: urls and cross-origin cases)
-                      // Using unoptimized above doesn't always cover blob: or blocked remote images, so display a plain <img>
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={form.imageUrl} alt="Vehicle" className="w-full h-44 object-cover rounded" />
-                    )
+                {form.imageUrl ? (
+                  !imageBroken ? (
+                    <Image
+                      src={form.imageUrl}
+                      alt="Vehicle"
+                      width={600}
+                      height={220}
+                      className="w-full h-44 object-cover rounded"
+                      unoptimized
+                      onError={() => setImageBroken(true)}
+                    />
                   ) : (
-                    <div className="w-full h-44 bg-gray-100 flex items-center justify-center rounded text-gray-400">ไม่มีรูป</div>
-                  )}
-                </div>
+                    <img src={form.imageUrl} alt="Vehicle" className="w-full h-44 object-cover rounded" />
+                  )
+                ) : (
+                  <div className="w-full h-44 bg-gray-100 flex items-center justify-center rounded text-gray-400">ไม่มีรูป</div>
+                )}
+              </div>
               <input type="file" accept="image/*" onChange={handleImageChange} className="mt-3 w-full" />
               <div className="mt-3 flex gap-2">
                 <input value={imageUrlInput} onChange={(e) => setImageUrlInput(e.target.value)} placeholder="วางลิงก์รูปที่นี่" className="flex-1 p-2 border rounded" />
                 <button type="button" onClick={applyImageUrl} className="px-3 py-2 bg-blue-600 text-white rounded">ใช้ลิงก์</button>
               </div>
             </div>
-
-            <div className="w-full bg-gray-50 p-3 rounded border text-sm">
-              <div className="font-semibold">ข้อมูลสรุป</div>
-              <div className="text-xs text-gray-600 mt-2">{form.brand} {form.model}</div>
-              <div className="text-xs text-gray-600">ทะเบียน: {form.licensePlate}</div>
-              <div className="text-xs text-gray-600">ไมล์: {form.currentMileage}</div>
-              <div className="text-xs text-gray-600">สถานะ: {vehicle?.status || form.status || '-'}</div>
-            </div>
-
-            <div className="w-full flex gap-3">
+            <div className="w-full flex gap-3 mt-10 pt-6 border-t">
               <button type="button" onClick={() => router.back()} className="flex-1 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
               <button type="submit" className="flex-1 px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700">บันทึก</button>
             </div>

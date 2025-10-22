@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
+import { DataProvider } from "@/context/DataContext";
 import useLiffAuth from '@/hooks/useLiffAuth';
 import { useState, useEffect } from 'react';
 import LiffQueryRouter from '@/components/main/LiffQueryRouter';
@@ -114,10 +115,12 @@ export default function MainLayout({ children }) {
   // ถ้ามี userProfile แล้ว (login และมี profile ในระบบ)
   if (userProfile) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <LiffQueryRouter />
-        {children}
-      </div>
+      <DataProvider userId={userProfile.uid}>
+        <div className="min-h-screen bg-gray-50">
+          <LiffQueryRouter />
+          {children}
+        </div>
+      </DataProvider>
     );
   }
 

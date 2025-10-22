@@ -127,7 +127,14 @@ export default function AddVehiclePage() {
               </div>
               <div>
                 <label className="block mb-1 text-sm font-medium">ประเภท</label>
-                <input name="type" value={form.type} onChange={handleChange} className="w-full p-3 border rounded-md" />
+                <select name="type" value={form.type} onChange={handleChange} className="w-full p-3 border rounded-md">
+                  <option value="รถเก๋ง">รถเก๋ง</option>
+                  <option value="รถกระบะ">รถกระบะ</option>
+                  <option value="รถตู้">รถตู้</option>
+                  <option value="รถบรรทุก">รถบรรทุก</option>
+                  <option value="มอเตอร์ไซค์">มอเตอร์ไซค์</option>
+                  <option value="อื่นๆ">อื่นๆ</option>
+                </select>
               </div>
             </div>
 
@@ -164,24 +171,24 @@ export default function AddVehiclePage() {
             <div className="w-full">
               <label className="block mb-2 text-sm font-medium">รูปรถ</label>
               <div className="w-full bg-gray-50 rounded-lg border p-3 flex items-center justify-center">
-                  {form.imageUrl ? (
-                    !imageBroken ? (
-                      <Image
-                        src={form.imageUrl}
-                        alt="Vehicle"
-                        width={600}
-                        height={220}
-                        className="w-full h-44 object-cover rounded"
-                        unoptimized
-                        onError={() => setImageBroken(true)}
-                      />
-                    ) : (
-                      <img src={form.imageUrl} alt="Vehicle" className="w-full h-44 object-cover rounded" />
-                    )
+                {form.imageUrl ? (
+                  !imageBroken ? (
+                    <Image
+                      src={form.imageUrl}
+                      alt="Vehicle"
+                      width={600}
+                      height={220}
+                      className="w-full h-44 object-cover rounded"
+                      unoptimized
+                      onError={() => setImageBroken(true)}
+                    />
                   ) : (
-                    <div className="w-full h-44 bg-gray-100 flex items-center justify-center rounded text-gray-400">ไม่มีรูป</div>
-                  )}
-                </div>
+                    <img src={form.imageUrl} alt="Vehicle" className="w-full h-44 object-cover rounded" />
+                  )
+                ) : (
+                  <div className="w-full h-44 bg-gray-100 flex items-center justify-center rounded text-gray-400">ไม่มีรูป</div>
+                )}
+              </div>
               <input type="file" accept="image/*" onChange={handleImageChange} className="mt-3 w-full" />
               <div className="mt-3 flex gap-2">
                 <input value={imageUrlInput} onChange={(e) => setImageUrlInput(e.target.value)} placeholder="วางลิงก์รูปที่นี่" className="flex-1 p-2 border rounded" />
@@ -189,15 +196,7 @@ export default function AddVehiclePage() {
               </div>
             </div>
 
-            <div className="w-full bg-gray-50 p-3 rounded border text-sm">
-              <div className="font-semibold">ข้อมูลสรุป</div>
-              <div className="text-xs text-gray-600 mt-2">{form.brand} {form.model}</div>
-              <div className="text-xs text-gray-600">ทะเบียน: {form.licensePlate}</div>
-              <div className="text-xs text-gray-600">ไมล์: {form.currentMileage}</div>
-              <div className="text-xs text-gray-600">สถานะ: {form.status || '-'}</div>
-            </div>
-
-            <div className="w-full flex gap-3">
+            <div className="w-full flex gap-3 mt-10 pt-6 border-t">
               <button type="button" onClick={() => router.back()} className="flex-1 px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
               <button type="submit" className="flex-1 px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700">บันทึก</button>
             </div>

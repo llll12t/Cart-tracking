@@ -132,12 +132,22 @@ export default function TripHistoryPage() {
                     <h4 className="font-semibold mb-2">รายละเอียดค่าใช้จ่าย</h4>
                     {t.expenses && t.expenses.length > 0 ? (
                       <div className="space-y-2 text-sm">
-                        {t.expenses.map(exp => (
-                          <div key={exp.id} className="flex justify-between">
-                            <div>{exp.type || 'อื่นๆ'} - {exp.note || '-'}</div>
-                            <div className="font-medium">{exp.amount || 0} ฿</div>
-                          </div>
-                        ))}
+                        {t.expenses.map(exp => {
+                          const typeMap = {
+                            'fuel': 'น้ำมัน',
+                            'toll': 'ค่าทางด่วน',
+                            'parking': 'ค่าจอดรถ',
+                            'maintenance': 'ค่าซ่อมบำรุง',
+                            'other': 'อื่นๆ'
+                          };
+                          const displayType = typeMap[exp.type] || exp.type || 'อื่นๆ';
+                          return (
+                            <div key={exp.id} className="flex justify-between">
+                              <div>{displayType} - {exp.note || '-'}</div>
+                              <div className="font-medium">{exp.amount || 0} ฿</div>
+                            </div>
+                          );
+                        })}
                         <div className="pt-2 border-t border-gray-200 flex justify-between font-semibold">
                           <div>รวม</div>
                           <div>{t.expenses.reduce((s, e) => s + (e.amount || 0), 0)} ฿</div>

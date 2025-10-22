@@ -7,28 +7,12 @@ import { collection, addDoc, query, orderBy, limit, getDocs, where } from "fireb
 export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0], // ตั้งค่าเริ่มต้นเป็นวันปัจจุบัน
-    mileage: currentMileage || '',
-    liters: '',
     cost: '',
   });
-  const [previousMileage, setPreviousMileage] = useState(0);
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ดึงเลขไมล์ครั้งล่าสุดเพื่อคำนวณอัตราสิ้นเปลือง
-  useEffect(() => {
-    const q = query(
-      collection(db, "fuel_logs"),
-      where('vehicleId', '==', vehicleId),
-      orderBy("mileage", "desc"),
-      limit(1)
-    );
-    getDocs(q).then(snapshot => {
-      if (!snapshot.empty) {
-        setPreviousMileage(snapshot.docs[0].data().mileage);
-      }
-    });
-  }, [vehicleId]);
+  // ไม่มีการดึงเลขไมล์ล่าสุดอีกต่อไป
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -39,27 +23,10 @@ export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      // Prevent duplicate: check same vehicle + mileage already exists
-      const existingQ = query(
-        collection(db, "fuel_logs"),
-        where('vehicleId', '==', vehicleId),
-        where('mileage', '==', Number(formData.mileage)),
-        limit(1)
-      );
-      const existingSnap = await getDocs(existingQ);
-      if (!existingSnap.empty) {
-        setMessage('มีรายการเติมน้ำมันสำหรับเลขไมล์นี้แล้ว');
-        setIsSubmitting(false);
-        return;
-      }
-
       await addDoc(collection(db, "fuel_logs"), {
         vehicleId,
         date: new Date(formData.date),
-        mileage: Number(formData.mileage),
-        liters: Number(formData.liters),
         cost: Number(formData.cost),
-        previousMileage: previousMileage, // บันทึกเลขไมล์ครั้งก่อนไว้
       });
       setMessage('บันทึกข้อมูลสำเร็จ!');
       setTimeout(onClose, 1500);
@@ -77,8 +44,6 @@ export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
         <h2 className="mb-6 text-2xl font-bold">เพิ่มรายการเติมน้ำมัน</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input type="date" name="date" value={formData.date} onChange={handleChange} required className="w-full p-2 border rounded"/>
-          <input type="number" name="mileage" value={formData.mileage} placeholder="เลขไมล์ปัจจุบัน (กม.)" onChange={handleChange} required className="w-full p-2 border rounded"/>
-          <input type="number" step="0.01" name="liters" placeholder="จำนวน (ลิตร)" onChange={handleChange} required className="w-full p-2 border rounded"/>
           <input type="number" step="0.01" name="cost" placeholder="ราคารวม (บาท)" onChange={handleChange} required className="w-full p-2 border rounded"/>
           {message && <p className="text-center">{message}</p>}
           <div className="flex justify-end gap-4 pt-4">
