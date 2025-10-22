@@ -9,16 +9,23 @@ import { useCallback } from 'react';
 import Image from 'next/image';
 
 function MaintenanceRecord({ record }) {
-    const formatDate = (value) => {
+    const formatDateTime = (value) => {
         if (!value) return '-';
-        if (value.seconds) return new Date(value.seconds * 1000).toLocaleDateString('th-TH');
-        if (value.toDate) return value.toDate().toLocaleDateString('th-TH');
-        return new Date(value).toLocaleDateString('th-TH');
+        let dateObj;
+        if (value.seconds) {
+            dateObj = new Date(value.seconds * 1000);
+        } else if (value.toDate) {
+            dateObj = value.toDate();
+        } else {
+            dateObj = new Date(value);
+        }
+        return dateObj.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) +
+            ' ' + dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
     };
     const formatCurrency = (number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(number ?? 0);
 
     // compute display fields with fallbacks
-    const displayDate = record.date ? formatDate(record.date) : (record.createdAt ? formatDate(record.createdAt) : '-');
+    const displayDate = record.date ? formatDateTime(record.date) : (record.createdAt ? formatDateTime(record.createdAt) : '-');
     const displayMileage = record.finalMileage ?? record.odometerAtDropOff ?? record.mileage ?? null;
     const displayCost = record.finalCost ?? record.cost ?? 0;
     const typeLabel = record.type === 'garage' ? 'ซ่อมอู่' : 'แจ้งค่าซ่อม';
@@ -35,16 +42,35 @@ function MaintenanceRecord({ record }) {
         return map[st] || 'bg-gray-100 text-gray-800';
     };
 
+    // สถานะภาษาไทย
+    const statusLabel = (st) => {
+        switch (st) {
+            case 'pending': return 'รอดำเนินการ';
+            case 'in_progress': return 'กำลังซ่อม';
+            case 'completed': return 'เสร็จสิ้น';
+            case 'cancelled': return 'ยกเลิก';
+            case 'recorded': return 'บันทึกแล้ว';
+            default: return '-';
+        }
+    };
+
+    // แสดง badge แหล่งที่มา
+    const sourceBadge = record.source === 'expenses' ? (
+        <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded ml-2">จากทริป</span>
+    ) : null;
+
     return (
-        <div className="bg-white p-4 rounded-lg shadow grid grid-cols-8 gap-4 items-center">
-            <p className="text-gray-700">{displayDate}</p>
-            <p className="text-gray-700">{displayMileage !== null ? displayMileage.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' กม.' : '-'}</p>
+        <div className="bg-white p-4 rounded-lg shadow grid grid-cols-7 gap-4 items-center">
+            <div>
+                <p className="text-gray-700">{displayDate}</p>
+                {sourceBadge}
+            </div>
             <p className="text-gray-700">{typeLabel}</p>
             <p className="text-gray-700">{record.vendor ?? '-'}</p>
             <p className="text-gray-700 col-span-2">{record.details}</p>
             <p className="font-semibold text-right">{formatCurrency(displayCost)}</p>
             <div className="flex justify-end">
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusBadge(status)}`}>{status}</span>
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusBadge(status)}`}>{statusLabel(status)}</span>
             </div>
         </div>
     );
@@ -54,6 +80,7 @@ export default function MaintenancePage() {
     const { vehicleId } = useParams();
     const [vehicle, setVehicle] = useState(null);
     const [records, setRecords] = useState([]);
+    const [maintenanceExpenses, setMaintenanceExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -72,18 +99,95 @@ export default function MaintenancePage() {
 
     useEffect(() => {
         if (!vehicleId) return;
+        
+        // ดึง maintenances
         const q = query(
             collection(db, "maintenances"),
             where("vehicleId", "==", vehicleId),
             orderBy("date", "desc")
         );
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const recordsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const recordsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), source: 'maintenances' }));
             setRecords(recordsData);
-            setLoading(false);
         });
+
+        // ดึง expenses ที่เป็นค่าซ่อมบำรุง (maintenance, toll, parking, other) ผ่าน bookings
+        const fetchMaintenanceExpenses = async () => {
+            try {
+                // ดึง bookings ของรถคันนี้
+                const bookingsSnap = await (await import('firebase/firestore')).getDocs(
+                    query(collection(db, 'bookings'), where('vehicleId', '==', vehicleId))
+                );
+                const bookingsMap = {};
+                bookingsSnap.docs.forEach(d => {
+                    bookingsMap[d.id] = d.data();
+                });
+                const bookingIds = Object.keys(bookingsMap);
+
+                if (bookingIds.length === 0) {
+                    setMaintenanceExpenses([]);
+                    setLoading(false);
+                    return;
+                }
+
+                // ดึง expenses ที่ไม่ใช่ fuel
+                const expensesSnap = await (await import('firebase/firestore')).getDocs(
+                    collection(db, 'expenses')
+                );
+                const maintExps = expensesSnap.docs
+                    .map(d => ({ 
+                        id: d.id, 
+                        ...d.data(), 
+                        source: 'expenses',
+                        bookingData: bookingsMap[d.data().bookingId] // เก็บข้อมูล booking ไว้ด้วย
+                    }))
+                    .filter(exp => ['maintenance', 'toll', 'parking', 'other'].includes(exp.type) && bookingIds.includes(exp.bookingId));
+
+                setMaintenanceExpenses(maintExps);
+            } catch (e) {
+                console.error('Error fetching maintenance expenses:', e);
+            }
+            setLoading(false);
+        };
+
+        fetchMaintenanceExpenses();
+
         return () => unsubscribe();
     }, [vehicleId]);
+
+    // รวมข้อมูลจาก maintenances และ expenses
+    const allRecords = [
+        ...records,
+        ...maintenanceExpenses.map(exp => {
+            const typeMap = {
+                'maintenance': 'ค่าซ่อมบำรุง',
+                'toll': 'ค่าทางด่วน',
+                'parking': 'ค่าจอดรถ',
+                'other': 'อื่นๆ'
+            };
+            // ใช้ startDateTime จาก booking เป็นวันที่บันทึก
+            let date = exp.bookingData?.startDateTime;
+            // ถ้าไม่มี startDateTime ให้ใช้ createdAt หรือ date
+            if (!date) date = exp.createdAt || exp.date;
+            // ถ้า date เป็น string ให้แปลงเป็น Date object
+            if (date && typeof date === 'string') date = new Date(date);
+            return {
+                id: exp.id,
+                date,
+                finalMileage: exp.mileage || null,
+                type: 'cost-only',
+                vendor: typeMap[exp.type] || exp.type,
+                details: exp.note || '-',
+                finalCost: exp.amount || 0,
+                maintenanceStatus: 'recorded',
+                source: 'expenses'
+            };
+        })
+    ].sort((a, b) => {
+        const at = a.date?.seconds ? a.date.seconds * 1000 : (a.date ? new Date(a.date).getTime() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0));
+        const bt = b.date?.seconds ? b.date.seconds * 1000 : (b.date ? new Date(b.date).getTime() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0));
+        return bt - at;
+    });
 
     // No receive modal on vehicle page — this page only records cost-only maintenance entries.
     const openReceiveModal = (rec) => {
@@ -143,17 +247,16 @@ export default function MaintenancePage() {
             )}
 
             <div className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-8 gap-4 font-semibold text-gray-600">
-                    <p>วันที่</p>
-                    <p>เลขไมล์</p>
-                    <p>ประเภท</p>
-                    <p>อู่</p>
-                    <p className="col-span-2">รายละเอียดการซ่อม</p>
-                    <p className="text-right">ค่าใช้จ่าย</p>
-                    <p className="text-right">สถานะ</p>
+                <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-7 gap-4 font-semibold text-gray-600">
+                    <p>วันที่/เวลา</p>
+                    <p>หมวดค่าใช้จ่าย</p>
+                    <p>ชื่ออู่/ผู้ให้บริการ</p>
+                    <p className="col-span-2">รายละเอียด</p>
+                    <p className="text-right">จำนวนเงิน (บาท)</p>
+                    <p className="text-right">สถานะรายการ</p>
                 </div>
-                {records.length > 0 ? (
-                    records.map(record => <MaintenanceRecord key={record.id} record={record} vehicleId={vehicleId} openReceiveModal={openReceiveModal} />)
+                {allRecords.length > 0 ? (
+                    allRecords.map(record => <MaintenanceRecord key={record.id} record={record} vehicleId={vehicleId} openReceiveModal={openReceiveModal} />)
                 ) : (
                     <p className="text-center py-8 text-gray-500">ยังไม่มีประวัติการซ่อมบำรุง</p>
                 )}

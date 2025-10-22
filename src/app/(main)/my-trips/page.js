@@ -9,6 +9,7 @@ import Image from 'next/image';
 import { getImageUrl } from '@/lib/imageHelpers';
 import { useRouter } from 'next/navigation';
 import MainHeader from '@/components/main/MainHeader';
+import { createWorker } from 'tesseract.js';
 
 // Component สำหรับ Trip Card 1 ใบ
 function TripCard({ trip }) {
@@ -17,6 +18,8 @@ function TripCard({ trip }) {
     const [showExpenseForm, setShowExpenseForm] = useState(false);
     const [vehicle, setVehicle] = useState(null);
     const [expenses, setExpenses] = useState([]);
+    const [scanning, setScanning] = useState(false);
+    const [scanType, setScanType] = useState(null); // 'start' or 'end'
 
     useEffect(() => {
         const vehicleRef = doc(db, "vehicles", trip.vehicleId);
@@ -150,6 +153,141 @@ function TripCard({ trip }) {
 
     const totalExpenses = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
 
+    const handleScan = async (type) => {
+        setScanType(type);
+        setScanning(true);
+        
+        try {
+            // Request camera access
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' } 
+            });
+            
+            // Create video element
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.play();
+            
+            // Wait for video to be ready
+            await new Promise(resolve => {
+                video.onloadedmetadata = resolve;
+            });
+            
+            // Create canvas for capturing
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            
+            // Show camera preview
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+            modal.innerHTML = `
+                <div style="color:white;margin-bottom:20px;text-align:center;">
+                    <p style="font-size:18px;font-weight:bold;">แสกนเลขไมล์</p>
+                    <p style="font-size:14px;margin-top:8px;">วางกล้องให้เห็นเลขไมล์ชัดเจน</p>
+                </div>
+                <div style="position:relative;">
+                    <video id="scanVideo" autoplay playsinline style="max-width:90vw;max-height:60vh;border-radius:8px;"></video>
+                </div>
+                <div style="margin-top:20px;display:flex;gap:12px;">
+                    <button id="captureBtn" style="padding:12px 24px;background:#0d9488;color:white;border:none;border-radius:8px;font-weight:600;">ถ่ายรูป</button>
+                    <button id="cancelBtn" style="padding:12px 24px;background:#6b7280;color:white;border:none;border-radius:8px;font-weight:600;">ยกเลิก</button>
+                </div>
+                <div id="ocrStatus" style="color:white;margin-top:16px;font-size:14px;display:none;">
+                    <p>กำลังอ่านเลขไมล์...</p>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            const modalVideo = document.getElementById('scanVideo');
+            modalVideo.srcObject = stream;
+            
+            // Handle capture button
+            document.getElementById('captureBtn').onclick = async () => {
+                ctx.drawImage(modalVideo, 0, 0);
+                const imageData = canvas.toDataURL('image/jpeg');
+                
+                // Stop camera
+                stream.getTracks().forEach(track => track.stop());
+                
+                // Show OCR status
+                const statusDiv = document.getElementById('ocrStatus');
+                statusDiv.style.display = 'block';
+                document.getElementById('captureBtn').disabled = true;
+                document.getElementById('cancelBtn').disabled = true;
+                
+                try {
+                    // Initialize Tesseract worker
+                    const worker = await createWorker('eng', 1, {
+                        logger: m => {
+                            if (m.status === 'recognizing text') {
+                                statusDiv.innerHTML = `<p>กำลังอ่านเลขไมล์... ${Math.round(m.progress * 100)}%</p>`;
+                            }
+                        }
+                    });
+                    
+                    // Perform OCR
+                    const { data: { text } } = await worker.recognize(imageData);
+                    await worker.terminate();
+                    
+                    // Extract numbers from text
+                    const numbers = text.match(/\d+/g);
+                    let mileageValue = null;
+                    
+                    if (numbers && numbers.length > 0) {
+                        // Find the largest number (likely to be mileage)
+                        const sortedNumbers = numbers.map(n => parseInt(n)).sort((a, b) => b - a);
+                        mileageValue = sortedNumbers[0];
+                        
+                        // Validate
+                        const minValue = type === 'start' ? (vehicle?.currentMileage || 0) : (trip.startMileage || 0);
+                        
+                        if (mileageValue < minValue) {
+                            alert(`เลขไมล์ที่อ่านได้ (${mileageValue}) น้อยกว่าค่าเดิม (${minValue})\nกรุณาลองใหม่หรือพิมพ์ด้วยตนเอง`);
+                            document.body.removeChild(modal);
+                            setScanning(false);
+                            return;
+                        }
+                        
+                        // Confirm with user
+                        const confirmed = confirm(`อ่านเลขไมล์ได้: ${mileageValue}\nต้องการใช้ค่านี้หรือไม่?`);
+                        if (confirmed) {
+                            if (type === 'start') {
+                                setStartMileage(mileageValue.toString());
+                            } else {
+                                setEndMileage(mileageValue.toString());
+                            }
+                        }
+                    } else {
+                        alert('ไม่พบตัวเลขในภาพ กรุณาลองใหม่หรือพิมพ์ด้วยตนเอง');
+                    }
+                    
+                    document.body.removeChild(modal);
+                    setScanning(false);
+                    
+                } catch (err) {
+                    console.error('OCR error:', err);
+                    alert('ไม่สามารถอ่านเลขได้ กรุณาลองใหม่หรือพิมพ์ด้วยตนเอง');
+                    document.body.removeChild(modal);
+                    setScanning(false);
+                }
+            };
+            
+            // Handle cancel button
+            document.getElementById('cancelBtn').onclick = () => {
+                stream.getTracks().forEach(track => track.stop());
+                document.body.removeChild(modal);
+                setScanning(false);
+            };
+            
+        } catch (err) {
+            console.error('Camera error:', err);
+            alert('ไม่สามารถเข้าถึงกล้องได้ กรุณาอนุญาตการใช้งานกล้อง');
+            setScanning(false);
+        }
+    };
+
     return (
         <>
             <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
@@ -244,6 +382,14 @@ function TripCard({ trip }) {
                                 className="flex-1 p-2 border border-gray-300 rounded-lg text-sm"
                             />
                             <button 
+                                onClick={() => handleScan('start')} 
+                                disabled={scanning}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                                title="แสกนเลขไมล์"
+                            >
+                                📷
+                            </button>
+                            <button 
                                 onClick={handleStartTrip} 
                                 className="px-6 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700"
                             >
@@ -263,6 +409,14 @@ function TripCard({ trip }) {
                                 onChange={(e) => setEndMileage(e.target.value)}
                                 className="flex-1 p-2 border border-gray-300 rounded-lg text-sm"
                             />
+                            <button 
+                                onClick={() => handleScan('end')} 
+                                disabled={scanning}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+                                title="แสกนเลขไมล์"
+                            >
+                                📷
+                            </button>
                             <button 
                                 onClick={handleEndTrip} 
                                 className="px-6 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700"

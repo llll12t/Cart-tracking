@@ -20,8 +20,11 @@ function fmtDate(d) {
     }
 
     if (isNaN(dt.getTime())) return String(d);
-    // Show date only (Thai medium format), no time
-    return dt.toLocaleDateString('th-TH', { dateStyle: 'medium' });
+    // Show date and time (Thai format)
+    return dt.toLocaleString('th-TH', { 
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    });
   } catch (e) {
     return String(d);
   }
@@ -74,7 +77,7 @@ function baseBubble(title, fields = [], footerText = '', actions = []) {
 export function bookingCreatedAdmin(booking) {
   const title = 'คำขอจองรถใหม่';
   const fields = [
-    `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
+    `ผู้ขอ: ${booking.requesterName || '-'}`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
   // Show only the usage start date (no end date)
   `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)}`
@@ -97,7 +100,7 @@ export function bookingCreatedAdmin(booking) {
 export function bookingApprovalRequestAdmin(booking) {
   const title = 'คำขออนุมัติการจองรถ';
   const fields = [
-    `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
+    `ผู้ขอ: ${booking.requesterName || '-'}`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
   `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)}`
   ];
@@ -115,7 +118,7 @@ export function bookingApprovalRequestAdmin(booking) {
 export function bookingApprovedAdmin(booking) {
   const title = 'การจองได้รับการอนุมัติ';
   const fields = [
-    `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
+    `ผู้ขอ: ${booking.requesterName || '-'}`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
   `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)}`
   ];
@@ -125,7 +128,7 @@ export function bookingApprovedAdmin(booking) {
 export function vehicleSentAdmin(booking) {
   const title = 'รถถูกส่งให้ผู้ขอแล้ว';
   const fields = [
-    `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
+    `ผู้ขอ: ${booking.requesterName || '-'}`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
     // sentAt preferred, otherwise use startDateTime or calendar date
     `ส่งเมื่อ: ${fmtDate(booking.sentAt || booking.startDateTime || booking.startCalendarDate || Date.now())}`
@@ -136,7 +139,7 @@ export function vehicleSentAdmin(booking) {
 export function vehicleReturnedAdmin(booking) {
   const title = 'รถได้ถูกคืนแล้ว';
   const fields = [
-    `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
+    `ผู้ขอ: ${booking.requesterName || '-'}`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
     `คืนเมื่อ: ${fmtDate(booking.returnedAt || booking.endDateTime || booking.endCalendarDate || Date.now())}`,
     booking.startMileage ? `เริ่มต้น (km): ${booking.startMileage}` : null,
@@ -150,7 +153,7 @@ export function vehicleReturnedAdmin(booking) {
 export function bookingCreatedDriver(booking) {
   const title = 'มีการจองรอรับผิดชอบ';
   const fields = [
-    `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
+    `ผู้ขอ: ${booking.requesterName || '-'}`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
   `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)}`
   ];
@@ -191,7 +194,7 @@ export function vehicleReturnedDriver(booking) {
 export function bookingCreatedEmployee(booking) {
   const title = 'มีการขอจองรถ';
   const fields = [
-    `ผู้ขอ: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
+    `ผู้ขอ: ${booking.requesterName || '-'}`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
     `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)} → ${fmtDate(booking.endDateTime || booking.endCalendarDate || booking.endDate)}`
   ];
@@ -201,7 +204,7 @@ export function bookingCreatedEmployee(booking) {
 export function bookingRejectedAdmin(booking) {
   const title = 'คำขอถูกปฏิเสธ';
   const fields = [
-    `คำขอโดย: ${booking.requesterName || '-'} (${booking.userEmail || '-'})`,
+    `คำขอโดย: ${booking.requesterName || '-'}`,
     `รถ: ${booking.vehicleLicensePlate || '-'}`,
     `วันที่: ${fmtDate(booking.startDateTime || booking.startCalendarDate || booking.startDate)} → ${fmtDate(booking.endDateTime || booking.endCalendarDate || booking.endDate)}`
   ];

@@ -1,5 +1,4 @@
 // src/app/layout.js
-import { Suspense } from 'react';
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext"; // 1. Import เข้ามา
@@ -20,9 +19,7 @@ export default function RootLayout({ children }) {
       </head>
       <body className={inter.className}>
         <AuthProvider>
-          <Suspense fallback={null}>
-            <PageTransition />
-          </Suspense>
+          <PageTransition />
           {children}
         </AuthProvider>
       </body>
