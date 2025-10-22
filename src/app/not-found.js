@@ -1,6 +1,8 @@
+"use client";
 import Link from "next/link";
+import { Suspense } from "react";
 
-export default function NotFound() {
+function NotFoundContent() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
       <h1 className="text-4xl font-bold text-teal-700 mb-4">404</h1>
@@ -10,5 +12,13 @@ export default function NotFound() {
         กลับหน้าแรก
       </Link>
     </div>
+  );
+}
+
+export default function NotFound() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-100"><p>Loading...</p></div>}>
+      <NotFoundContent />
+    </Suspense>
   );
 }
