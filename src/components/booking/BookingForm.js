@@ -12,6 +12,7 @@ import { collection, addDoc, serverTimestamp, query, where, onSnapshot } from "f
 export default function BookingForm() {
   const { user, userProfile } = useAuth();
   const [vehicles, setVehicles] = useState([]);
+  const [loadingVehicles, setLoadingVehicles] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
@@ -36,15 +37,22 @@ export default function BookingForm() {
     let unsubBookings = null;
     let allVehicles = [];
     let bookedVehicleIds = new Set();
+    let vehiclesLoaded = false;
+    let bookingsLoaded = false;
 
     // ดึง bookings ที่ยังไม่จบ (pending, approved, on_trip)
     unsubBookings = onSnapshot(
       query(collection(db, "bookings"), where("status", "in", ["pending", "approved", "on_trip"])),
       (snapshot) => {
         bookedVehicleIds = new Set(snapshot.docs.map(doc => doc.data().vehicleId));
+        bookingsLoaded = true;
         // หลังจากได้ bookings แล้ว ให้ filter vehicles อีกที
         if (allVehicles.length > 0) {
           setVehicles(allVehicles.filter(v => !bookedVehicleIds.has(v.id)));
+        }
+        // ถ้าทั้ง vehicles และ bookings โหลดเสร็จแล้ว ให้ปิด loading
+        if (vehiclesLoaded && bookingsLoaded) {
+          setLoadingVehicles(false);
         }
       }
     );
@@ -53,8 +61,13 @@ export default function BookingForm() {
       allVehicles = snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(v => v.status === 'available');
+      vehiclesLoaded = true;
       // filter ซ้ำ: ไม่เอารถที่ถูกจองแล้ว
       setVehicles(allVehicles.filter(v => !bookedVehicleIds.has(v.id)));
+      // ถ้าทั้ง vehicles และ bookings โหลดเสร็จแล้ว ให้ปิด loading
+      if (vehiclesLoaded && bookingsLoaded) {
+        setLoadingVehicles(false);
+      }
     });
 
     return () => {

@@ -82,7 +82,6 @@ export default function VehicleGaragePage() {
       </div>
 
       <div className="mb-4 flex items-center justify-between">
-        <Link href={`/maintenance`} className="text-sm text-indigo-600 underline">กลับไปที่บันทึกค่าใช้จ่าย</Link>
         <div className="text-sm">รวมค่าใช้จ่ายทั้งหมด: <span className="font-semibold">{totalCost.toLocaleString('th-TH')} บาท</span></div>
       </div>
 

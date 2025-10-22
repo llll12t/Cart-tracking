@@ -9,6 +9,7 @@ export default function useLiffAuth() {
   const [error, setError] = useState(null);
   const [needsLink, setNeedsLink] = useState(false);
   const [linkProfile, setLinkProfile] = useState(null);
+  const [userProfile, setUserProfile] = useState(null); // เพิ่ม state สำหรับเก็บ userProfile
   const { liff, profile, loading: liffLoading, error: liffError } = useLiff(process.env.NEXT_PUBLIC_LIFF_ID);
 
   useEffect(() => {
@@ -54,7 +55,13 @@ export default function useLiffAuth() {
           setLoading(false);
           return;
         }
-        const { customToken } = body;
+        const { customToken, userProfile: receivedProfile } = body;
+        
+        // เก็บ userProfile ที่ได้จาก API
+        if (receivedProfile) {
+          setUserProfile(receivedProfile);
+        }
+        
         const auth = getAuth();
         await signInWithCustomToken(auth, customToken);
         if (!mounted) return;
@@ -85,7 +92,13 @@ export default function useLiffAuth() {
       if (!resp.ok) {
         throw new Error(body?.error || 'link_failed');
       }
-      const { customToken } = body;
+      const { customToken, userProfile: receivedProfile } = body;
+      
+      // เก็บ userProfile ที่ได้จาก link API
+      if (receivedProfile) {
+        setUserProfile(receivedProfile);
+      }
+      
       const auth = getAuth();
       await signInWithCustomToken(auth, customToken);
       setNeedsLink(false);
@@ -100,5 +113,5 @@ export default function useLiffAuth() {
     }
   };
 
-  return { loading, error, needsLink, linkProfile, linkByPhone };
+  return { loading, error, needsLink, linkProfile, linkByPhone, userProfile };
 }

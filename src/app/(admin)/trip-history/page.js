@@ -49,10 +49,9 @@ export default function TripHistoryPage() {
 
         // fetch expenses related to this booking
         try {
-          // expenses are in collection 'expenses' with bookingId field
           const expQ = query(collection(db, 'expenses'), where('bookingId', '==', data.id));
-          // We can't await onSnapshot here easily in a loop; instead leave expenses empty and rely on client-side fetch below if needed
-          data.expenses = [];
+          const snapshot = await (await import('firebase/firestore')).getDocs(expQ);
+          data.expenses = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         } catch (e) {
           data.expenses = [];
         }
@@ -89,7 +88,7 @@ export default function TripHistoryPage() {
 
       {trips.length === 0 && <div className="bg-white rounded p-6 shadow">ไม่พบประวัติการเดินทาง</div>}
 
-      <div className="space-y-4">
+      <div className="space-y-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {trips.map(t => (
           <div key={t.id} className="bg-white rounded-xl shadow p-4">
             <div className="flex gap-4 items-start">

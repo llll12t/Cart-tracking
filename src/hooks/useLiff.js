@@ -131,8 +131,9 @@ const useLiff = (liffId) => {
                     return;
                 }
 
-                const userProfile = await liff.getProfile();
-                setProfile(userProfile);
+                // ไม่ต้องดึง profile ที่นี่เพราะจะได้จาก API route แทน
+                // const userProfile = await liff.getProfile();
+                // setProfile(userProfile);
                 setLiffObject(liff);
 
             } catch (err) {

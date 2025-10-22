@@ -116,7 +116,7 @@ export default function ConfirmBookingPage() {
     if (isFinalStatus) return;
     setProcessing(true);
     setMessage('กำลังอนุมัติ...');
-    // If no driver assigned, attempt to auto-assign the requester when they are a driver
+    // If no driver assigned, attempt to auto-assign the requester when they are a driver or admin
     let assignedDriverId = booking?.driverId;
     let assignedDriverName = booking?.driverName;
     if (!assignedDriverId) {
@@ -127,21 +127,25 @@ export default function ConfirmBookingPage() {
           const uSnap = await getDoc(uRef);
           if (uSnap.exists()) {
             const ud = uSnap.data();
-            if (ud.role === 'driver') {
+            // อนุญาตให้ทั้ง driver และ admin เป็นคนขับได้
+            if (ud.role === 'driver' || ud.role === 'admin') {
               assignedDriverId = uSnap.id;
               assignedDriverName = ud.name || ud.displayName || ud.email || '';
             }
           }
         }
-        // Otherwise, try lookup by email and restrict to drivers
+        // Otherwise, try lookup by email and restrict to drivers and admins
         if (!assignedDriverId && booking?.userEmail) {
-          const q = query(collection(db, 'users'), where('email', '==', booking.userEmail), where('role', '==', 'driver'));
+          const q = query(collection(db, 'users'), where('email', '==', booking.userEmail));
           const snaps = await getDocs(q);
           if (!snaps.empty) {
             const udoc = snaps.docs[0];
             const ud = udoc.data();
-            assignedDriverId = udoc.id;
-            assignedDriverName = ud.name || ud.displayName || ud.email || '';
+            // อนุญาตให้ทั้ง driver และ admin เป็นคนขับได้
+            if (ud.role === 'driver' || ud.role === 'admin') {
+              assignedDriverId = udoc.id;
+              assignedDriverName = ud.name || ud.displayName || ud.email || '';
+            }
           }
         }
       } catch (e) {

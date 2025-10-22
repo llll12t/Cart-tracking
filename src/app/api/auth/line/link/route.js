@@ -26,10 +26,49 @@ export async function POST(request) {
     const phoneSnapshot = await usersRef.where('phone', '==', phone).limit(1).get();
 
     if (phoneSnapshot.empty) {
-      return NextResponse.json(
-        { error: 'No user found with this phone number' },
-        { status: 404 }
-      );
+      // สร้างผู้ใช้ใหม่อัตโนมัติถ้าไม่พบในระบบ
+      console.log('No user found with phone:', phone, '- creating new user');
+      
+      try {
+        const newUserData = {
+          phone: phone,
+          lineId: lineId,
+          role: 'driver', // กำหนด role เริ่มต้นเป็น driver สำหรับผู้ใช้ใหม่
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          linkedAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastLogin: admin.firestore.FieldValue.serverTimestamp()
+        };
+        
+        const newUserRef = await usersRef.add(newUserData);
+        const newUid = newUserRef.id;
+        
+        // Create Firebase Auth user
+        await admin.auth().createUser({
+          uid: newUid,
+          phoneNumber: phone,
+          disabled: false
+        });
+        
+        // Create custom token for new user
+        const customToken = await admin.auth().createCustomToken(newUid);
+        
+        return NextResponse.json({ 
+          customToken,
+          userProfile: {
+            uid: newUid,
+            ...newUserData,
+            createdAt: new Date() // convert for JSON
+          },
+          message: 'Successfully created and linked new user'
+        });
+        
+      } catch (error) {
+        console.error('Error creating new user:', error);
+        return NextResponse.json(
+          { error: 'Failed to create new user', details: error.message },
+          { status: 500 }
+        );
+      }
     }
 
     const userDoc = phoneSnapshot.docs[0];
@@ -81,8 +120,16 @@ export async function POST(request) {
     // Create custom token
     const customToken = await admin.auth().createCustomToken(uid);
 
+    // ดึงข้อมูล user ล่าสุดหลังจาก update
+    const updatedUserDoc = await userDoc.ref.get();
+    const updatedUserData = updatedUserDoc.data();
+
     return NextResponse.json({ 
       customToken,
+      userProfile: {
+        uid: uid,
+        ...updatedUserData
+      },
       message: 'Successfully linked LINE account'
     });
 

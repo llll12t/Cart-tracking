@@ -1,17 +1,22 @@
 // src/context/AuthContext.js
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
+export const AuthProvider = ({ children, initialUserProfile = null }) => {
   const [user, setUser] = useState(null);
-  const [userProfile, setUserProfile] = useState(null);
+  const [userProfile, setUserProfile] = useState(initialUserProfile);
   const [loading, setLoading] = useState(true);
+
+  // ฟังก์ชันสำหรับ set userProfile จากภายนอก (จาก useLiffAuth)
+  const setUserProfileFromAuth = useCallback((profile) => {
+    setUserProfile(profile);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -19,9 +24,14 @@ export const AuthProvider = ({ children }) => {
       if (firebaseUser) {
         setUser(firebaseUser);
         
-        // --- LOG ที่เพิ่มเข้ามา ---
+        // ถ้ามี userProfile อยู่แล้ว (จาก login response) ไม่ต้องดึงใหม่
+        if (userProfile) {
+          console.log("userProfile already exists, skipping Firestore query");
+          setLoading(false);
+          return;
+        }
+        
         console.log(`Attempting to find user profile with UID: ${firebaseUser.uid}`);
-        // -----------------------
 
         // ใช้ email ใน firebaseUser แทน UID (เหมือน payment flow)
         let userEmail = firebaseUser.email;
@@ -37,22 +47,9 @@ export const AuthProvider = ({ children }) => {
             console.log("User document found with email:", userEmail);
             setUserProfile({ uid: userDoc.id, ...userDoc.data() });
           } else {
-            // ถ้าไม่พบ user document ให้สร้างใหม่อัตโนมัติ
-            try {
-              const newUser = {
-                email: userEmail,
-                name: firebaseUser.displayName || userEmail.split('@')[0],
-                role: 'admin', // หรือกำหนด logic อื่นตามต้องการ
-                createdAt: new Date(),
-              };
-              const usersRef = collection(db, 'users');
-              const docRef = await (await import('firebase/firestore')).addDoc(usersRef, newUser);
-              setUserProfile({ uid: docRef.id, ...newUser });
-              console.log('Created new user document for', userEmail);
-            } catch (err) {
-              console.error('Failed to auto-create user document:', err);
-              setUserProfile(null);
-            }
+            console.log("No user document found for email:", userEmail);
+            // ไม่สร้างผู้ใช้อัตโนมัติที่นี่แล้ว - ย้ายไปทำที่ Backend
+            setUserProfile(null);
           }
         } else {
           console.error("No email found in firebaseUser. Cannot query user profile.");
@@ -67,9 +64,9 @@ export const AuthProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, []); // ลบ userProfile ออกจาก dependency เพื่อป้องกัน infinite loop
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await signOut(auth);
       setUser(null);
@@ -78,10 +75,19 @@ export const AuthProvider = ({ children }) => {
     } catch (err) {
       console.error('Logout error', err);
     }
-  };
+  }, []);
+
+  // ใช้ useMemo เพื่อป้องกัน context value object ถูกสร้างใหม่ทุกครั้ง
+  const contextValue = useMemo(() => ({
+    user,
+    userProfile,
+    loading,
+    logout,
+    setUserProfileFromAuth
+  }), [user, userProfile, loading, logout, setUserProfileFromAuth]);
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, logout }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

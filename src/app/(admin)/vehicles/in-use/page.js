@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { collection, query, where, onSnapshot, doc, getDoc, getDocs, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import Link from "next/link";
 import Image from 'next/image';
 
 function getStatusLabel(status) {
@@ -142,9 +141,6 @@ export default function VehiclesInUsePage() {
                 </div>
               )}
 
-              <div className="flex justify-end">
-                <Link href={`/vehicles/${v.id}/edit`} className="text-xs text-teal-600 hover:underline">รายละเอียด</Link>
-              </div>
             </div>
           </div>
         ))}

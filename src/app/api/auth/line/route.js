@@ -61,7 +61,18 @@ export async function POST(request) {
 
         // Create custom token
         const customToken = await admin.auth().createCustomToken(uid);
-        return NextResponse.json({ customToken });
+        
+        // ดึงข้อมูล user document สำหรับส่งกลับ
+        const userDoc = await db.collection('users').doc(uid).get();
+        const userData = userDoc.data();
+        
+        return NextResponse.json({ 
+          customToken,
+          userProfile: {
+            uid: uid,
+            ...userData
+          }
+        });
 
       } catch (error) {
         console.error('Mock auth error:', error);
@@ -111,6 +122,7 @@ export async function POST(request) {
     // User found - create custom token
     const userDoc = snapshot.docs[0];
     const uid = userDoc.id;
+    const userData = userDoc.data();
 
     // Optionally update LINE profile info
     await userDoc.ref.update({
@@ -121,7 +133,16 @@ export async function POST(request) {
 
     const customToken = await admin.auth().createCustomToken(uid);
 
-    return NextResponse.json({ customToken });
+    // ส่ง userProfile กลับมาด้วยเพื่อลดการดึงข้อมูลซ้ำ
+    return NextResponse.json({ 
+      customToken,
+      userProfile: {
+        uid: uid,
+        ...userData,
+        displayName: lineProfile.displayName,
+        pictureUrl: lineProfile.pictureUrl
+      }
+    });
 
   } catch (error) {
     console.error('Auth exchange error:', error);

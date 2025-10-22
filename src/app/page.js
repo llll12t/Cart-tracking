@@ -20,8 +20,8 @@ export default function LoginPage() {
       // หาก Login สำเร็จ ให้ redirect ไปหน้า dashboard
       router.push('/dashboard'); 
     } catch (err) {
-      setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
-      console.error(err);
+      // ไม่ต้อง alert ให้แสดงข้อความ error ใน UI
+      setError(err.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
     }
   };
 

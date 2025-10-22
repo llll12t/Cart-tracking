@@ -338,6 +338,13 @@ export default function ApprovalCard({ booking }) {
         await updateDoc(bookingRef, {
           status: "rejected",
         });
+        // หาก booking มี vehicleId ให้เปลี่ยนสถานะรถกลับเป็น available
+        if (booking.vehicleId) {
+          const vehicleRef = doc(db, "vehicles", booking.vehicleId);
+          await updateDoc(vehicleRef, {
+            status: "available"
+          });
+        }
       } catch (error) {
         console.error("Error rejecting booking: ", error);
         alert("Failed to reject booking.");
@@ -363,6 +370,10 @@ export default function ApprovalCard({ booking }) {
     <>
       <div className="bg-white p-5 rounded-2xl shadow-md hover:shadow-lg transition">
         <div className="flex flex-col gap-6 items-center">
+          {/* Admin badge */}
+          {booking.isAdminBooking && (
+            <div className="mb-2 px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">จองโดยแอดมิน</div>
+          )}
           {/* รูปรถและคนจอง */}
           <div className="flex flex-row gap-4 items-center mb-2">
             {getImageUrl({ vehicleImageUrl: booking.vehicleImageUrl, imageUrl: booking.vehicleImageUrl }) ? (

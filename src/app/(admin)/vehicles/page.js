@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { collection, onSnapshot, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import AddVehicleForm from "@/components/admin/AddVehicleForm";
 import Link from "next/link";
 import Image from 'next/image';
 
@@ -147,7 +146,7 @@ function VehicleList({ vehicles }) {
 }
 
 export default function VehiclesPage() {
-  const [showForm, setShowForm] = useState(false);
+  // Remove modal state for add vehicle
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -226,22 +225,14 @@ export default function VehiclesPage() {
 
   return (
     <div>
-      <div className="flex items-center  mb-6">
-        <button
-          onClick={() => setShowForm(true)}
+      <div className="flex items-center mb-6">
+        <Link
+          href="/vehicles/add"
           className="px-4 py-2 font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700"
         >
           + เพิ่มรถใหม่
-        </button>
+        </Link>
       </div>
-
-      {showForm && (
-        <div className="mb-8">
-          <div className="max-w-xl mx-auto bg-white rounded-xl shadow-lg p-6">
-            <AddVehicleForm onClose={() => setShowForm(false)} />
-          </div>
-        </div>
-      )}
 
       {loading ? (
         <p className="mt-6">กำลังโหลดข้อมูลรถ...</p>

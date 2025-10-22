@@ -1,76 +1,33 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Image from 'next/image';
-import { useRouter, useParams } from "next/navigation";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { useRouter } from "next/navigation";
+import { db, storage } from "@/lib/firebase";
+import { collection, addDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-export default function EditVehiclePage() {
+export default function AddVehiclePage() {
   const router = useRouter();
-  const params = useParams();
-  const vehicleId = params?.vehicleId;
-  const [vehicle, setVehicle] = useState(null);
   const [form, setForm] = useState({
     brand: "",
     model: "",
     licensePlate: "",
     currentMileage: "",
     year: "",
-    type: "",
+    type: "รถเก๋ง",
     color: "",
     note: "",
     imageUrl: "",
     taxDueDate: "",
     insuranceExpireDate: "",
-    status: "available"
+    status: "active"
   });
   const [imageFile, setImageFile] = useState(null);
   const [imageBroken, setImageBroken] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    async function fetchVehicle() {
-      if (!vehicleId) return;
-      setLoading(true);
-      const docRef = doc(db, "vehicles", vehicleId);
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        setVehicle(snap.data());
-        // parse date fields: Firestore may return Timestamp objects
-        // support either the old/new field names: taxDueDate or taxExpiryDate
-        const taxField = snap.data().taxDueDate || snap.data().taxExpiryDate || null;
-        const insuranceField = snap.data().insuranceExpireDate || snap.data().insuranceExpiryDate || null;
-        const toInputDate = (d) => {
-          if (!d) return "";
-          // Firestore Timestamp -> JS Date
-          if (d.seconds && typeof d.seconds === 'number') return new Date(d.seconds * 1000).toISOString().slice(0,10);
-          // JS Date
-          if (d.toDate) return d.toDate().toISOString().slice(0,10);
-          // string
-          try { return new Date(d).toISOString().slice(0,10); } catch (e) { return ""; }
-        };
-
-        setForm({
-          brand: snap.data().brand || "",
-          model: snap.data().model || "",
-          licensePlate: snap.data().licensePlate || "",
-          currentMileage: snap.data().currentMileage || "",
-          year: snap.data().year || "",
-          type: snap.data().type || "",
-          color: snap.data().color || "",
-          note: snap.data().note || "",
-          imageUrl: snap.data().imageUrl || "",
-          taxDueDate: toInputDate(taxField),
-          insuranceExpireDate: toInputDate(insuranceField),
-          status: snap.data().status || "available"
-        });
-      }
-      setLoading(false);
-    }
-    fetchVehicle();
-  }, [vehicleId]);
+  const [imageUrlInput, setImageUrlInput] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -80,22 +37,17 @@ export default function EditVehiclePage() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // handle image file select
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       setImageFile(file);
-      // clear any pasted URL when a local file is chosen
       setForm({ ...form, imageUrl: URL.createObjectURL(file) });
       setImageBroken(false);
     }
   };
 
-  // handle setting image via URL paste
-  const [imageUrlInput, setImageUrlInput] = useState("");
   const applyImageUrl = () => {
     if (!imageUrlInput) return;
-    // clear any selected local file preview
     setImageFile(null);
     setForm({ ...form, imageUrl: imageUrlInput });
     setImageUrlInput("");
@@ -103,17 +55,20 @@ export default function EditVehiclePage() {
   };
 
   // reset broken flag when image url/source changes
-  useEffect(() => {
-    setImageBroken(false);
-  }, [form.imageUrl]);
+  // ...existing code...
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
+    setLoading(true);
     try {
       let imageUrl = form.imageUrl;
-      const docRef = doc(db, "vehicles", vehicleId);
-      await updateDoc(docRef, {
+      if (imageFile) {
+        const storageRef = ref(storage, `vehicle_images/${imageFile.name}_${Date.now()}`);
+        const snapshot = await uploadBytes(storageRef, imageFile);
+        imageUrl = await getDownloadURL(snapshot.ref);
+      }
+      await addDoc(collection(db, "vehicles"), {
         brand: form.brand,
         model: form.model,
         licensePlate: form.licensePlate,
@@ -123,22 +78,21 @@ export default function EditVehiclePage() {
         color: form.color,
         note: form.note,
         imageUrl: imageUrl,
-        status: form.status || "available",
+        status: form.status || "active",
         taxDueDate: form.taxDueDate ? new Date(form.taxDueDate) : null,
         insuranceExpireDate: form.insuranceExpireDate ? new Date(form.insuranceExpireDate) : null
       });
-      setMessage("บันทึกข้อมูลรถสำเร็จ!");
+      setMessage("เพิ่มรถสำเร็จ!");
       setTimeout(() => router.push(`/vehicles`), 1200);
     } catch (err) {
-      setMessage("เกิดข้อผิดพลาดในการบันทึก");
+      setMessage("เกิดข้อผิดพลาดในการเพิ่มรถ");
     }
+    setLoading(false);
   };
-
-  if (loading) return <div className="p-8 text-center">กำลังโหลดข้อมูลรถ...</div>;
 
   return (
     <div className="max-w-6xl mx-auto p-8">
-      <h1 className="text-3xl font-bold mb-6">แก้ไขข้อมูลรถ</h1>
+      <h1 className="text-3xl font-bold mb-6">เพิ่มข้อมูลรถใหม่</h1>
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* main form (span 2) */}
@@ -146,14 +100,10 @@ export default function EditVehiclePage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block mb-1 text-sm font-medium">สถานะรถ</label>
-                <select name="status" value={form.status} onChange={handleChange} className="w-full p-3 border rounded-md">
-                  <option value="available">พร้อมใช้งาน</option>
-                  <option value="pending">รออนุมัติ</option>
-                  <option value="in_use">กำลังใช้งาน</option>
-                  <option value="on_trip">อยู่ระหว่างเดินทาง</option>
+                <select name="status" value={form.status || "active"} onChange={handleChange} className="w-full p-3 border rounded-md">
+                  <option value="active">พร้อมใช้งาน</option>
                   <option value="maintenance">ซ่อมบำรุง</option>
                   <option value="inactive">ไม่พร้อมใช้งาน</option>
-                  <option value="retired">ปลดระวาง</option>
                 </select>
               </div>
               <div>
@@ -226,9 +176,6 @@ export default function EditVehiclePage() {
                         onError={() => setImageBroken(true)}
                       />
                     ) : (
-                      // fallback to native img when Next/Image fails (works for blob: urls and cross-origin cases)
-                      // Using unoptimized above doesn't always cover blob: or blocked remote images, so display a plain <img>
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={form.imageUrl} alt="Vehicle" className="w-full h-44 object-cover rounded" />
                     )
                   ) : (
@@ -247,7 +194,7 @@ export default function EditVehiclePage() {
               <div className="text-xs text-gray-600 mt-2">{form.brand} {form.model}</div>
               <div className="text-xs text-gray-600">ทะเบียน: {form.licensePlate}</div>
               <div className="text-xs text-gray-600">ไมล์: {form.currentMileage}</div>
-              <div className="text-xs text-gray-600">สถานะ: {vehicle?.status || form.status || '-'}</div>
+              <div className="text-xs text-gray-600">สถานะ: {form.status || '-'}</div>
             </div>
 
             <div className="w-full flex gap-3">

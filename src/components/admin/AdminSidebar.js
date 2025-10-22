@@ -31,7 +31,7 @@ export default function AdminSidebar({ isOpen = false, onClose = () => { } }) {
 
   // Desktop sidebar
   const desktop = (
-    <aside className="hidden md:flex w-64 h-screen p-4 text-white bg-gradient-to-b from-[#075b50] to-[#002629] shrink-0 flex-col justify-between">
+  <aside className="hidden md:flex w-64 p-4 text-white bg-gradient-to-b from-[#075b50] to-[#002629] shrink-0 flex-col justify-between">
       <div>
         <h2 className="mb-8 text-2xl font-bold">Admin Panel</h2>
         <nav>
@@ -94,7 +94,7 @@ export default function AdminSidebar({ isOpen = false, onClose = () => { } }) {
         onClick={onClose}
       />
 
-      <aside className={`fixed left-0 top-0 bottom-0 w-64 p-4 bg-gradient-to-b from-[#075b50] to-[#002629] text-white transform transition-transform ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+  <aside className={`fixed left-0 top-0 w-64 h-[100vh] p-4 bg-gradient-to-b from-[#075b50] to-[#002629] text-white transform transition-transform ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold">Admin Panel</h2>
           <button onClick={onClose} aria-label="Close menu" className="p-2 rounded bg-white/10">

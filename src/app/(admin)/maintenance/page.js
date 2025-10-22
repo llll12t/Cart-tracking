@@ -255,7 +255,7 @@ export default function AdminMaintenanceQueue() {
 
   return (
     <div>
-      <div className="mt-8">
+      <div className="mt-2">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-semibold">รถที่ส่งอู่ (กำลังซ่อม)</h2>
           <button
