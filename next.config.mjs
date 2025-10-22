@@ -23,6 +23,10 @@ const nextConfig = {
         // คุณสามารถเพิ่ม hostname อื่นๆ ที่นี่ได้
       ],
     },
+    skipTrailingSlashRedirect: true,
+    experimental: {
+      missingSuspenseWithCSRBailout: false,
+    },
   };
   
   export default nextConfig;
