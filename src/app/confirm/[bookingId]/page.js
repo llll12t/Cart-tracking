@@ -175,8 +175,9 @@ export default function ConfirmBookingPage() {
       await batch.commit();
   setBooking((prev) => prev ? { ...prev, status: 'approved', driverId: assignedDriverId, driverName: assignedDriverName } : prev);
       setMessage('อนุมัติเรียบร้อยแล้ว');
-      // หลังอนุมัติ: ส่งการแจ้งเตือนผ่าน API (จะส่งเฉพาะ Admin + คนจอง)
+      // หลังอนุมัติ: แจ้งผู้ขับ (ถ้ามี) ว่ามีการมอบหมาย/อนุมัติ ให้ตรวจสอบการตั้งค่าการแจ้งเตือนก่อนส่ง
         try {
+        // Always request server to send notifications; server will check settings and recipients
         const notifResp = await fetch('/api/notifications/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -184,13 +185,13 @@ export default function ConfirmBookingPage() {
             event: 'booking_approved',
             booking: {
               id: bookingId,
-              userId: booking?.userId || booking?.requesterId,
               requesterName: booking?.requesterName,
               userEmail: booking?.userEmail,
               vehicleLicensePlate: booking?.vehicleLicensePlate,
-              driverId: assignedDriverId,
-              driverName: assignedDriverName,
+              driverId: booking?.driverId,
+              driverName: booking?.driverName,
               vehicleId: booking?.vehicleId,
+              // canonical fields
               startDateTime: booking?.startDateTime,
               startCalendarDate: booking?.startCalendarDate || booking?.startDate,
               endDateTime: booking?.endDateTime,
@@ -202,7 +203,10 @@ export default function ConfirmBookingPage() {
         if (notifJson && notifJson.results) {
           const r = notifJson.results;
           const sent = (r.sent && r.sent.length) || 0;
-          console.log(`✅ ส่งการแจ้งเตือนไปยัง ${sent} คน (Admin + คนจอง)`);
+          const skipped = (r.skipped && r.skipped.length) || 0;
+          const errors = (r.errors && r.errors.length) || 0;
+          setMessage(`แจ้งเตือน: ส่ง ${sent} ข้าม ${skipped} ข้อผิดพลาด ${errors}`);
+          console.log('Notifications result:', notifJson);
         }
       } catch (e) {
         console.warn('Failed to request booking_approved notifications', e);
@@ -246,31 +250,6 @@ export default function ConfirmBookingPage() {
       await updateDoc(bookingRef, { status: 'rejected' });
       setBooking((prev) => prev ? { ...prev, status: 'rejected' } : prev);
       setMessage('ปฏิเสธเรียบร้อยแล้ว');
-      
-      // ส่งการแจ้งเตือนผ่าน API (จะส่งเฉพาะ Admin + คนจอง)
-      try {
-        await fetch('/api/notifications/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            event: 'booking_rejected',
-            booking: {
-              id: bookingId,
-              userId: booking?.userId || booking?.requesterId,
-              requesterName: booking?.requesterName,
-              userEmail: booking?.userEmail,
-              vehicleLicensePlate: booking?.vehicleLicensePlate,
-              vehicleId: booking?.vehicleId,
-              startDateTime: booking?.startDateTime,
-              startCalendarDate: booking?.startCalendarDate || booking?.startDate
-            }
-          })
-        });
-        console.log('✅ ส่งการแจ้งเตือนการปฏิเสธไปยัง Admin + คนจอง');
-      } catch (e) {
-        console.warn('Failed to send rejection notification', e);
-      }
-      
       // ปิด LIFF ถ้าอยู่ใน LIFF
       setTimeout(() => {
         if (isLiff()) window.liff.close();

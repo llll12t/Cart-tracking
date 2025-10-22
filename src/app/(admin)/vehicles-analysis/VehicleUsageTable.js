@@ -138,21 +138,6 @@ export default function VehicleUsageTable() {
     }
   });
 
-  const getStatusText = (status) => {
-    if (!status) return '-';
-    switch (status) {
-      case 'approved': return 'อนุมัติแล้ว';
-      case 'pending': return 'รอดำเนินการ';
-      case 'rejected': return 'ปฏิเสธ';
-      case 'completed': return 'เสร็จสิ้น';
-      case 'on_trip': return 'กำลังเดินทาง';
-      case 'in_use': return 'กำลังใช้งาน';
-      case 'maintenance': return 'ซ่อมบำรุง';
-      case 'cancelled': return 'ยกเลิก';
-      default: return status || '-';
-    }
-  };
-
   return (
     <div className="mb-12">
       <h2 className="text-lg font-semibold mb-2">ตารางการเดินรถ (ย้อนหลัง)</h2>
@@ -202,7 +187,7 @@ export default function VehicleUsageTable() {
                   <td className="px-2 py-2 border">{t.requester}</td>
                   <td className="px-2 py-2 border text-right">{t.distance != null ? t.distance : '-'}</td>
                   <td className="px-2 py-2 border text-right">{t.expense ? t.expense.toLocaleString('th-TH') : '-'}</td>
-                  <td className="px-2 py-2 border text-center">{getStatusText(t.status)}</td>
+                  <td className="px-2 py-2 border text-center">{t.status}</td>
                 </tr>
               ))}
             </tbody>
@@ -210,7 +195,111 @@ export default function VehicleUsageTable() {
         </div>
       )}
 
-      {/* Removed: ผู้ใช้งานบ่อย, ช่วงเวลาที่มีการใช้งานบ่อย, การวิเคราะห์อัตราสิ้นเปลืองน้ำมัน */}
+      <h2 className="text-lg font-semibold mt-8 mb-2">ผู้ใช้งานบ่อย</h2>
+      <div className="overflow-x-auto">
+        <table className="min-w-full border text-sm">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="px-2 py-2 border">ผู้ใช้งาน</th>
+              <th className="px-2 py-2 border">จำนวนรอบ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(userSummary)
+              .sort((a, b) => b[1] - a[1])
+              .map(([user, count]) => (
+                <tr key={user}>
+                  <td className="px-2 py-2 border font-semibold">{user}</td>
+                  <td className="px-2 py-2 border text-center">{count}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 className="text-lg font-semibold mt-8 mb-2">ช่วงเวลาที่มีการใช้งานบ่อย</h2>
+      <div className="overflow-x-auto">
+        <table className="min-w-full border text-sm">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="px-2 py-2 border">เดือน/ปี</th>
+              <th className="px-2 py-2 border">จำนวนรอบ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(monthUsage)
+              .sort((a, b) => b[1] - a[1])
+              .map(([month, count]) => (
+                <tr key={month}>
+                  <td className="px-2 py-2 border font-semibold">{month}</td>
+                  <td className="px-2 py-2 border text-center">{count}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+      
+      <h2 className="text-lg font-semibold mt-8 mb-2">การวิเคราะห์อัตราสิ้นเปลืองน้ำมัน (กม./ลิตร)</h2>
+      <div className="overflow-x-auto">
+        <table className="min-w-full border text-sm">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="px-2 py-2 border">ทะเบียนรถ</th>
+              <th className="px-2 py-2 border">เฉลี่ย (กม./ลิตร)</th>
+              <th className="px-2 py-2 border">บันทึกล่าสุด (กม./ลิตร)</th>
+              <th className="px-2 py-2 border">จำนวนบันทึก</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(() => {
+              // group fuel logs by vehicleId or plate
+                      const byVehicle = {};
+                      fuelLogs.forEach(f => {
+                        const key = f.vehicleId || f.vehiclePlate || 'unknown';
+                        if (!byVehicle[key]) byVehicle[key] = [];
+                        byVehicle[key].push(f);
+                      });
+
+                      // compute km/l for each fill by sorting logs by date asc and pairing consecutive records
+                      const rows = Object.entries(byVehicle).map(([vehicle, logs]) => {
+                        // sort by date ascending so we can pair previous -> current
+                        logs.sort((a,b) => {
+                          const at = a.date?.seconds ? a.date.seconds * 1000 : a.date ? new Date(a.date).getTime() : 0;
+                          const bt = b.date?.seconds ? b.date.seconds * 1000 : b.date ? new Date(b.date).getTime() : 0;
+                          return at - bt;
+                        });
+
+                        const efficiencies = [];
+                        for (let i = 1; i < logs.length; i++) {
+                          const prev = logs[i-1];
+                          const cur = logs[i];
+                          const prevMileage = prev.mileage != null ? Number(prev.mileage) : (prev.previousMileage != null ? Number(prev.previousMileage) : null);
+                          const curMileage = cur.mileage != null ? Number(cur.mileage) : (cur.previousMileage != null ? Number(cur.previousMileage) : null);
+                          const liters = cur.liters != null ? Number(cur.liters) : null;
+                          if (prevMileage != null && curMileage != null && liters && curMileage > prevMileage) {
+                            const km = curMileage - prevMileage;
+                            efficiencies.push(km / liters);
+                          }
+                        }
+
+                        const avg = efficiencies.length ? (efficiencies.reduce((a,b)=>a+b,0)/efficiencies.length) : null;
+                        const last = efficiencies.length ? efficiencies[efficiencies.length-1] : null; // last computed pair
+                        const label = vehiclesMap[vehicle] || vehicle;
+                        return { vehicle: label, avg, last, count: logs.length };
+                      });
+
+              return rows.map(r => (
+                <tr key={r.vehicle}>
+                  <td className="px-2 py-2 border font-semibold">{r.vehicle}</td>
+                  <td className="px-2 py-2 border text-center">{r.avg ? r.avg.toFixed(2) : '-'}</td>
+                  <td className="px-2 py-2 border text-center">{r.last ? r.last.toFixed(2) : '-'}</td>
+                  <td className="px-2 py-2 border text-center">{r.count}</td>
+                </tr>
+              ));
+            })()}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

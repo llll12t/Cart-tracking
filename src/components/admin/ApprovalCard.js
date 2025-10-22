@@ -301,7 +301,7 @@ export default function ApprovalCard({ booking }) {
       await batch.commit();
       setShowModal(false);
 
-      // ส่ง Flex แจ้งลูกค้าเมื่อออนุมัติ (จะส่งเฉพาะ Admin + คนจอง)
+      // ส่ง Flex แจ้งลูกค้าเมื่ออนุมัติ
       try {
         await fetch('/api/notifications/send', {
           method: 'POST',
@@ -310,13 +310,10 @@ export default function ApprovalCard({ booking }) {
             event: 'booking_approved',
             booking: {
               id: booking.id,
-              userId: booking.userId || booking.requesterId,
               requesterName: requesterNameState || booking.requesterName || booking.userEmail,
-              userEmail: booking.userEmail,
               vehicleLicensePlate: vehicle.licensePlate,
-              vehicleId: booking.vehicleId,
-              driverId: selectedDriver,
               driverName: driver.name,
+              // include canonical fields for correct formatting in Flex builders
               startDateTime: booking.startDateTime,
               startCalendarDate: booking.startCalendarDate || booking.startDate,
               endDateTime: booking.endDateTime,
@@ -324,7 +321,6 @@ export default function ApprovalCard({ booking }) {
             }
           })
         });
-        console.log('✅ ส่งการแจ้งเตือนการอนุมัติไปยัง Admin + คนจอง');
       } catch (e) {
         console.warn('ส่ง Flex แจ้งลูกค้าไม่สำเร็จ', e);
       }
@@ -348,30 +344,6 @@ export default function ApprovalCard({ booking }) {
           await updateDoc(vehicleRef, {
             status: "available"
           });
-        }
-        
-        // ส่งการแจ้งเตือนการปฏิเสธ (จะส่งเฉพาะ Admin + คนจอง)
-        try {
-          await fetch('/api/notifications/send', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event: 'booking_rejected',
-              booking: {
-                id: booking.id,
-                userId: booking.userId || booking.requesterId,
-                requesterName: booking.requesterName || booking.userEmail,
-                userEmail: booking.userEmail,
-                vehicleLicensePlate: booking.vehicleLicensePlate,
-                vehicleId: booking.vehicleId,
-                startDateTime: booking.startDateTime,
-                startCalendarDate: booking.startCalendarDate || booking.startDate
-              }
-            })
-          });
-          console.log('✅ ส่งการแจ้งเตือนการปฏิเสธไปยัง Admin + คนจอง');
-        } catch (e) {
-          console.warn('ส่งการแจ้งเตือนการปฏิเสธไม่สำเร็จ', e);
         }
       } catch (error) {
         console.error("Error rejecting booking: ", error);

@@ -5,14 +5,12 @@ import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, runTransaction } from "firebase/firestore";
 
 export default function AddMaintenanceForm({ vehicleId, onClose, onlyCost = false }) {
-  const now = new Date();
-  const pad = (n) => n.toString().padStart(2, '0');
-  const defaultDateTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
   const [formData, setFormData] = useState({
-    date: defaultDateTime, // default to current date and time (YYYY-MM-DDTHH:mm)
+    date: new Date().toISOString().split('T')[0], // default to today (YYYY-MM-DD)
+    mileage: '',
     details: '',
     cost: '',
-    type: onlyCost ? 'cost-only' : 'cost-only',
+    type: onlyCost ? 'cost-only' : 'cost-only', // default remains cost-only; onlyCost will hide selector
     vendor: '',
     expectedReturnDate: '',
   });
@@ -40,9 +38,11 @@ export default function AddMaintenanceForm({ vehicleId, onClose, onlyCost = fals
           if (!vSnap.exists()) throw new Error('vehicle-not-found');
 
           const maintRef = doc(collection(db, 'maintenances'));
+          const odometer = Number(formData.mileage) || vSnap.data()?.currentMileage || null;
           tx.set(maintRef, {
             vehicleId: vehicleId,
             date: new Date(formData.date),
+            odometerAtDropOff: odometer,
             details: formData.details,
             cost: Number(formData.cost),
             type: 'garage',
@@ -52,12 +52,13 @@ export default function AddMaintenanceForm({ vehicleId, onClose, onlyCost = fals
             createdAt: serverTimestamp(),
           });
 
-          tx.update(vehicleRef, { status: 'maintenance', lastMaintenanceId: maintRef.id });
+          tx.update(vehicleRef, { status: 'maintenance', lastMaintenanceId: maintRef.id, currentMileage: odometer });
         });
       } else {
         const maintRef = await addDoc(collection(db, "maintenances"), {
           vehicleId: vehicleId,
           date: new Date(formData.date),
+          mileage: Number(formData.mileage),
           details: formData.details,
           cost: Number(formData.cost),
           type: formData.type,
@@ -70,6 +71,7 @@ export default function AddMaintenanceForm({ vehicleId, onClose, onlyCost = fals
         try {
           const vehicleRef = doc(db, 'vehicles', vehicleId);
           const updateData = { lastMaintenanceId: maintRef.id };
+          if (formData.mileage) updateData.currentMileage = Number(formData.mileage);
           await updateDoc(vehicleRef, updateData);
         } catch (uErr) {
           console.error('Failed to update vehicle lastMaintenanceId after creating maintenance:', uErr);
@@ -114,7 +116,8 @@ export default function AddMaintenanceForm({ vehicleId, onClose, onlyCost = fals
       <div className="w-full max-w-lg p-8 bg-white rounded-lg shadow-2xl">
         <h2 className="mb-6 text-2xl font-bold">เพิ่มรายการซ่อมบำรุง</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input type="datetime-local" name="date" value={formData.date} onChange={handleChange} required className="w-full p-2 border rounded"/>
+          <input type="date" name="date" onChange={handleChange} required className="w-full p-2 border rounded"/>
+          <input type="number" name="mileage" placeholder="เลขไมล์ (กม.)" onChange={handleChange} required className="w-full p-2 border rounded"/>
 
           {!onlyCost && (
             <div>

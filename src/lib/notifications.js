@@ -25,10 +25,8 @@ function normalizeBooking(b) {
     id: b.id || b.bookingId || b._id || '',
     requesterName: b.requesterName || b.requester || b.userName || '',
     userEmail: b.userEmail || b.requesterEmail || b.requester?.email || '',
-    // who created the booking (requester)
-    userId: b.userId || b.requesterId || null,
     // who will drive / who was assigned
-    driverId: b.driverId || b.driver?.id || b.driverUid || null,
+    driverId: b.driverId || b.driver?.id || b.driverUid || b.userId || null,
     driverName: b.driverName || b.driver?.name || b.driver?.displayName || null,
     vehicleLicensePlate: b.vehicleLicensePlate || b.vehicle?.licensePlate || b.vehicleId || '',
     // Canonical fields introduced: startDateTime (instant), startCalendarDate (YYYY-MM-DD)
@@ -151,29 +149,13 @@ export async function sendNotificationsForEvent(event, booking) {
   // Collect issues for optional admin alert
   const issues = [];
 
-  // Build recipient list based on event type
+  // Build recipient list. For vehicle_returned we only notify admins + the returning driver
   let recipientDocs = [];
   try {
-    if (event === 'booking_created') {
-      // For booking_created: notify only admins + the requester
+    if (event === 'vehicle_returned') {
+      // admins
       const adminSnaps = await db.collection('users').where('role', '==', 'admin').get();
       recipientDocs.push(...adminSnaps.docs);
-      
-      // Add the requester (person who created the booking)
-      const requesterId = fullBooking.userId || fullBooking.requesterId;
-      if (requesterId) {
-        try {
-          const requesterDoc = await db.collection('users').doc(requesterId).get();
-          if (requesterDoc.exists) recipientDocs.push(requesterDoc);
-        } catch (e) {
-          console.warn('Failed to fetch requester user for notifications', requesterId, e);
-        }
-      }
-    } else if (event === 'vehicle_returned') {
-      // For vehicle_returned: notify admins + the returning driver
-      const adminSnaps = await db.collection('users').where('role', '==', 'admin').get();
-      recipientDocs.push(...adminSnaps.docs);
-      
       // returning driver (if assigned)
       if (fullBooking && fullBooking.driverId) {
         try {
@@ -183,47 +165,7 @@ export async function sendNotificationsForEvent(event, booking) {
           console.warn('Failed to fetch driver user for notifications', fullBooking.driverId, e);
         }
       }
-    } else if (event === 'booking_approved' || event === 'booking_rejected') {
-      // For approval/rejection: notify admins + the requester
-      const adminSnaps = await db.collection('users').where('role', '==', 'admin').get();
-      recipientDocs.push(...adminSnaps.docs);
-      
-      const requesterId = fullBooking.userId || fullBooking.requesterId;
-      if (requesterId) {
-        try {
-          const requesterDoc = await db.collection('users').doc(requesterId).get();
-          if (requesterDoc.exists) recipientDocs.push(requesterDoc);
-        } catch (e) {
-          console.warn('Failed to fetch requester user for notifications', requesterId, e);
-        }
-      }
-    } else if (event === 'vehicle_sent') {
-      // For vehicle_sent: notify admins + assigned driver + requester
-      const adminSnaps = await db.collection('users').where('role', '==', 'admin').get();
-      recipientDocs.push(...adminSnaps.docs);
-      
-      // Add driver
-      if (fullBooking && fullBooking.driverId) {
-        try {
-          const drv = await db.collection('users').doc(fullBooking.driverId).get();
-          if (drv.exists) recipientDocs.push(drv);
-        } catch (e) {
-          console.warn('Failed to fetch driver user for notifications', fullBooking.driverId, e);
-        }
-      }
-      
-      // Add requester
-      const requesterId = fullBooking.userId || fullBooking.requesterId;
-      if (requesterId) {
-        try {
-          const requesterDoc = await db.collection('users').doc(requesterId).get();
-          if (requesterDoc.exists) recipientDocs.push(requesterDoc);
-        } catch (e) {
-          console.warn('Failed to fetch requester user for notifications', requesterId, e);
-        }
-      }
     } else {
-      // For other events: notify all users (fallback to original behavior)
       const usersSnapshot = await db.collection('users').where('role', 'in', ['admin', 'employee', 'driver']).get();
       recipientDocs.push(...usersSnapshot.docs);
     }

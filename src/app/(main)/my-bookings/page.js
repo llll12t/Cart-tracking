@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useData } from "@/context/DataContext";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { collection, query, where, orderBy, doc, getDocs, limit, startAfter, onSnapshot } from "firebase/firestore";
+import { getImageUrl } from '@/lib/imageHelpers';
 import MainHeader from '@/components/main/MainHeader';
 
 // Component สำหรับแสดงข้อมูลการจอง 1 รายการ
@@ -27,35 +27,30 @@ function BookingCard({ booking }) {
 
     const formatDate = (d) => {
         if (!d) return '-';
+        // Firestore Timestamp
         if (d.seconds && typeof d.seconds === 'number') {
-            return new Date(d.seconds * 1000).toLocaleString('th-TH', { 
-                day: '2-digit', month: '2-digit', year: 'numeric', 
-                hour: '2-digit', minute: '2-digit' 
-            });
+            return new Date(d.seconds * 1000).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
-        if (d instanceof Date) return d.toLocaleString('th-TH', { 
-            day: '2-digit', month: '2-digit', year: 'numeric', 
-            hour: '2-digit', minute: '2-digit' 
-        });
+        // JS Date
+        if (d instanceof Date) return d.toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        // ISO string
         try {
+            // If value is a calendar-only string like 'YYYY-MM-DD', construct local midnight
             if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
                 const parts = d.split('-');
                 const localDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0);
-                return localDate.toLocaleString('th-TH', { 
-                    day: '2-digit', month: '2-digit', year: 'numeric', 
-                    hour: '2-digit', minute: '2-digit' 
-                });
+                return localDate.toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
             }
             const parsed = new Date(d);
-            if (!isNaN(parsed)) return parsed.toLocaleString('th-TH', { 
-                day: '2-digit', month: '2-digit', year: 'numeric', 
-                hour: '2-digit', minute: '2-digit' 
-            });
+            if (!isNaN(parsed)) return parsed.toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         } catch (e) {}
         return '-';
     };
 
     const getBookingDate = (bk, type) => {
+        // type: 'start' | 'end'
+        // Prefer the explicit timestamp fields (startDateTime/endDateTime) which represent the intended local moment.
+        // Prefer precise timestamp fields first, then calendar-only strings, then legacy date fields
         const candidates = {
             start: [bk.startDateTime, bk.startCalendarDate || bk.startDate, bk.start],
             end: [bk.endDateTime, bk.endCalendarDate || bk.endDate, bk.end]
@@ -87,187 +82,218 @@ function BookingCard({ booking }) {
     };
 
     return (
-        <div className="bg-white rounded-xl shadow-sm mb-4 overflow-hidden border border-gray-100">
-            <div className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                                {getStatusText(booking.status)}
-                            </span>
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+            <div className="flex p-4 gap-4">
+                                {/* Vehicle Image Placeholder */}
+                                <div className="w-20 h-20 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden">
+                                    {getImageUrl(vehicle) ? (
+                                        <img src={getImageUrl(vehicle)} alt={`${vehicle?.brand || ''} ${vehicle?.model || ''}`} className="w-full h-full object-cover" />
+                                    ) : null}
+                                </div>
+                
+                <div className="flex-1">
+                    <div className="flex flex-row justify-between items-start">
+                        <div className="flex flex-col items-start">
+                            <div className="flex flex-row gap-2 items-center">
+                                <span className="text-sm text-gray-600">ยี่ห้อ</span>
+                                <span className="font-semibold">{vehicle?.brand || '-'}</span>
+                            </div>
+                            <div className="flex flex-row gap-2 items-center mt-1">
+                                <span className="text-sm text-gray-600">รุ่น</span>
+                                <span className="font-semibold">{vehicle?.model || '-'}</span>
+                            </div>
                         </div>
-                        <h3 className="font-semibold text-gray-800 text-lg">
-                            {vehicle?.licensePlate || booking.vehicleLicensePlate || 'ไม่ระบุทะเบียน'}
-                        </h3>
-                        <p className="text-sm text-gray-600">{vehicle?.brand} {vehicle?.model}</p>
+                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(booking.status)}`}>
+                            {getStatusText(booking.status)}
+                        </span>
                     </div>
-                    {vehicle?.imageUrl && (
-                        <img 
-                            src={vehicle.imageUrl} 
-                            alt="vehicle" 
-                            className="w-20 h-20 object-cover rounded-lg"
-                        />
-                    )}
-                </div>
-
-                <div className="space-y-2 text-sm">
-                    <div className="flex items-center text-gray-600">
-                        <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span><strong>เริ่ม:</strong> {formatDate(getBookingDate(booking, 'start'))}</span>
-                    </div>
-                    <div className="flex items-center text-gray-600">
-                        <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <span><strong>สิ้นสุด:</strong> {formatDate(getBookingDate(booking, 'end'))}</span>
-                    </div>
-                    <div className="flex items-center text-gray-600">
-                        <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <span><strong>จุดหมาย:</strong> {booking.destination || '-'}</span>
+                    <div className="flex flex-row gap-2 items-center mt-2">
+                        <span className="text-sm text-gray-600">ทะเบียน</span>
+                        <span className="font-semibold">{booking.vehicleLicensePlate || vehicle?.licensePlate || '-'}</span>
                     </div>
                 </div>
-
-                {booking.purpose && (
-                    <button
-                        onClick={() => setIsExpanded(!isExpanded)}
-                        className="mt-3 text-sm text-teal-600 font-medium flex items-center gap-1"
-                    >
-                        {isExpanded ? 'ซ่อนรายละเอียด' : 'แสดงรายละเอียด'}
-                        <svg className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                    </button>
-                )}
-
-                {isExpanded && (
-                    <div className="mt-3 pt-3 border-t border-gray-100">
-                        <p className="text-sm text-gray-600">
-                            <strong>วัตถุประสงค์:</strong> {booking.purpose}
-                        </p>
-                        {booking.passengers && (
-                            <p className="text-sm text-gray-600 mt-2">
-                                <strong>จำนวนผู้โดยสาร:</strong> {booking.passengers} คน
-                            </p>
-                        )}
-                    </div>
-                )}
             </div>
+
+            {/* Expanded Details */}
+            {isExpanded && (
+                <>
+                    {/* Trip Details */}
+                    <div className="px-4 pb-4 space-y-2 text-sm border-t border-gray-100 pt-4">
+                        <div className="flex justify-between">
+                            <span className="font-semibold">จุดเริ่ม</span>
+                            <span className="text-gray-600">{booking.origin || '-'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="font-semibold">จุดหมาย</span>
+                            <span className="text-gray-600">{booking.destination || '-'}</span>
+                        </div>
+                        {booking.startMileage && (
+                            <div className="flex justify-between">
+                                <span className="font-semibold">เลขไมล์เริ่มต้น</span>
+                                <span className="text-gray-600">{booking.startMileage}</span>
+                            </div>
+                        )}
+                        {booking.endMileage && (
+                            <div className="flex justify-between">
+                                <span className="font-semibold">เลขไมล์สิ้นสุด</span>
+                                <span className="text-gray-600">{booking.endMileage}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between">
+                            <span className="font-semibold">วันเริ่มต้น</span>
+                            <span className="text-gray-600">{formatDate(getBookingDate(booking,'start') || booking.createdAt)}</span>
+                        </div>
+                        {getBookingDate(booking,'end') && (
+                            <div className="flex justify-between">
+                                <span className="font-semibold">วันสิ้นสุด</span>
+                                <span className="text-gray-600">{formatDate(getBookingDate(booking,'end'))}</span>
+                            </div>
+                        )}
+                        {/* createdAt / userEmail intentionally hidden per request */}
+                    </div>
+
+                    {/* Purpose Section */}
+                    {booking.purpose && (
+                        <div className="px-4 pb-4">
+                            <p className="font-semibold text-sm mb-2">วัตถุประสงค์</p>
+                            <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
+                                {booking.purpose}
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
+
+            {/* Toggle Button */}
+            <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="w-full py-3 text-center text-teal-700 text-sm font-semibold hover:bg-gray-50 transition-all border-t border-gray-100"
+            >
+                {isExpanded ? '▲ ซ่อนรายละเอียด' : '▼ ดูรายละเอียด'}
+            </button>
         </div>
     );
 }
 
 export default function MyBookingsPage() {
-    const { userProfile } = useAuth();
-    const { bookings, loading, stats, lastFetch } = useData();
-    const router = useRouter();
-    const [activeTab, setActiveTab] = useState('bookings');
+    const { user, userProfile, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState('history');
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(true);
+    const lastDocRef = useRef(null);
+    const sentinelRef = useRef(null);
+    const PAGE_SIZE = 5;
 
-    // กรอง bookings ตามสถานะ
-    const pendingBookings = bookings.filter(b => b.status === 'pending' || !b.status);
-    const approvedBookings = bookings.filter(b => b.status === 'approved');
-    const otherBookings = bookings.filter(b => 
-        b.status !== 'pending' && 
-        b.status !== 'approved' && 
-        b.status
-    );
+    useEffect(() => {
+        // wait for auth to resolve first
+        if (authLoading) return;
 
+        if (!user) {
+            // not signed in -> no bookings to load
+            setBookings([]);
+            setLoading(false);
+            return;
+        }
+
+            let mounted = true;
+
+            async function loadPage(startAfterDoc = null) {
+                try {
+                    const base = collection(db, 'bookings');
+                    let q;
+                    if (startAfterDoc) {
+                        q = query(base, where('userId', '==', user.uid), orderBy('createdAt', 'desc'), startAfter(startAfterDoc), limit(PAGE_SIZE));
+                    } else {
+                        q = query(base, where('userId', '==', user.uid), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
+                    }
+                    const snap = await getDocs(q);
+                    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+                    // Update last visible
+                    const lastVisible = snap.docs[snap.docs.length - 1] || null;
+                    if (mounted) {
+                        if (!startAfterDoc) {
+                            setBookings(docs);
+                        } else {
+                            setBookings(prev => [...prev, ...docs]);
+                        }
+                        lastDocRef.current = lastVisible;
+                        // If fewer than page size returned, no more pages
+                        setHasMore(snap.docs.length === PAGE_SIZE);
+                        setLoading(false);
+                    }
+                } catch (e) {
+                    console.error('Failed to load bookings page', e);
+                    if (mounted) setLoading(false);
+                }
+            }
+
+            // initial load
+            loadPage();
+
+            // IntersectionObserver to lazy load more when sentinel is visible
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting && !loadingMore && hasMore) {
+                        // load next page
+                        (async () => {
+                            setLoadingMore(true);
+                            try {
+                                await loadPage(lastDocRef.current);
+                            } finally {
+                                setLoadingMore(false);
+                            }
+                        })();
+                    }
+                });
+            }, { root: null, rootMargin: '200px', threshold: 0.1 });
+
+            if (sentinelRef.current) observer.observe(sentinelRef.current);
+
+            return () => {
+                mounted = false;
+                if (sentinelRef.current) observer.unobserve(sentinelRef.current);
+            };
+    }, [user, authLoading]);
+
+  if (loading) {
     return (
-        <div className="min-h-screen bg-gray-50">
-            <MainHeader userProfile={userProfile} activeTab={activeTab} setActiveTab={setActiveTab} />
-
-            <div className="px-4 py-6 -mt-16">
-                {/* Stats Cards */}
-                <div className="grid grid-cols-3 gap-3 mb-6">
-                    <div className="bg-white rounded-xl p-4 shadow-sm text-center">
-                        <div className="text-2xl font-bold text-yellow-600">{stats.pendingBookings}</div>
-                        <div className="text-xs text-gray-600 mt-1">รอดำเนินการ</div>
-                    </div>
-                    <div className="bg-white rounded-xl p-4 shadow-sm text-center">
-                        <div className="text-2xl font-bold text-green-600">{stats.approvedBookings}</div>
-                        <div className="text-xs text-gray-600 mt-1">อนุมัติแล้ว</div>
-                    </div>
-                    <div className="bg-white rounded-xl p-4 shadow-sm text-center">
-                        <div className="text-2xl font-bold text-gray-600">{stats.totalBookings}</div>
-                        <div className="text-xs text-gray-600 mt-1">ทั้งหมด</div>
-                    </div>
-                </div>
-
-                {/* Real-time indicator */}
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold text-gray-800">การจองของฉัน</h2>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                        <span>อัปเดตอัตโนมัติ</span>
-                    </div>
-                </div>
-
-                {/* Loading State */}
-                {loading && bookings.length === 0 ? (
-                    <div className="text-center py-12">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
-                        <p className="text-gray-600">กำลังโหลดข้อมูล...</p>
-                    </div>
-                ) : (
-                    <>
-                        {/* รอดำเนินการ */}
-                        {pendingBookings.length > 0 && (
-                            <div className="mb-6">
-                                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                                    <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                                    รอดำเนินการ ({pendingBookings.length})
-                                </h3>
-                                {pendingBookings.map(booking => (
-                                    <BookingCard key={booking.id} booking={booking} />
-                                ))}
-                            </div>
-                        )}
-
-                        {/* อนุมัติแล้ว */}
-                        {approvedBookings.length > 0 && (
-                            <div className="mb-6">
-                                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                    อนุมัติแล้ว ({approvedBookings.length})
-                                </h3>
-                                {approvedBookings.map(booking => (
-                                    <BookingCard key={booking.id} booking={booking} />
-                                ))}
-                            </div>
-                        )}
-
-                        {/* อื่น ๆ */}
-                        {otherBookings.length > 0 && (
-                            <div className="mb-6">
-                                <h3 className="text-sm font-semibold text-gray-700 mb-3">อื่น ๆ ({otherBookings.length})</h3>
-                                {otherBookings.map(booking => (
-                                    <BookingCard key={booking.id} booking={booking} />
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Empty State */}
-                        {bookings.length === 0 && (
-                            <div className="text-center py-12">
-                                <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                </svg>
-                                <p className="text-gray-600 mb-4">ยังไม่มีการจอง</p>
-                                <button
-                                    onClick={() => router.push('/booking')}
-                                    className="px-6 py-3 bg-teal-600 text-white rounded-full font-semibold hover:bg-teal-700 transition-all"
-                                >
-                                    จองรถเลย
-                                </button>
-                            </div>
-                        )}
-                    </>
-                )}
-            </div>
-        </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">กำลังโหลด...</p>
+      </div>
     );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <MainHeader userProfile={userProfile} activeTab={activeTab} setActiveTab={setActiveTab} />
+      {/* Content Area */}
+      <div className="bg-gray-100 p-4 -mt-16 pb-8">
+                {bookings.length > 0 ? (
+                    <div className="space-y-4">
+                        {bookings.map((booking) => (
+                            <BookingCard key={booking.id} booking={booking} />
+                        ))}
+                        {/* Sentinel element observed by IntersectionObserver to lazy-load more */}
+                        <div ref={sentinelRef} className="h-8 flex items-center justify-center">
+                            {loadingMore ? (
+                                <p className="text-sm text-gray-500">กำลังโหลดเพิ่มเติม...</p>
+                            ) : (!hasMore ? (
+                                <p className="text-sm text-gray-400">ไม่มีข้อมูลเพิ่มเติม</p>
+                            ) : (
+                                <p className="text-sm text-gray-400">เลื่อนลงเพื่อโหลดเพิ่มเติม</p>
+                            ))}
+                        </div>
+                    </div>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-sm p-8 text-center">
+            <p className="text-gray-500">ไม่มีประวัติการจอง</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
