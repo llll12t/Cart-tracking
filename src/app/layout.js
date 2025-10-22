@@ -2,6 +2,8 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext"; // 1. Import เข้ามา
+import PageTransition from '@/components/PageTransition';
+import { DataCacheProvider } from '@/context/DataCacheContext';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -14,12 +16,14 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
-        {/* Disable user scaling/zoom on mobile to prevent pinch-zoom */}
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       </head>
       <body className={inter.className}>
         <AuthProvider>
-          {children}
+          <PageTransition />
+          <DataCacheProvider>
+            {children}
+          </DataCacheProvider>
         </AuthProvider>
       </body>
     </html>
