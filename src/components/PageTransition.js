@@ -1,25 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 
 export default function PageTransition() {
   const pathname = usePathname();
-  const search = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  // When pathname/search changes, show a short transition
+  // When pathname changes, show a short transition
   useEffect(() => {
-    // start
     setLoading(true);
     setProgress(10);
     const timers = [];
-    // simulate progress
     timers.push(setTimeout(() => setProgress(40), 80));
     timers.push(setTimeout(() => setProgress(65), 180));
     timers.push(setTimeout(() => setProgress(90), 320));
-    // finish after small delay
     timers.push(setTimeout(() => {
       setProgress(100);
       setTimeout(() => {
@@ -29,7 +25,7 @@ export default function PageTransition() {
     }, 420));
 
     return () => timers.forEach(t => clearTimeout(t));
-  }, [pathname, search]);
+  }, [pathname]);
 
   return (
     <div aria-hidden>
