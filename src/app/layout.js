@@ -5,23 +5,27 @@ import { AuthProvider } from "@/context/AuthContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
-// กำหนด metadata ทั้งหมดที่นี่ที่เดียว
+// 1. แยก metadata ทั่วไปออกมา
 export const metadata = {
   title: "Management",
   description: "ระบบจัดการรถในองค์กร",
-  // ใช้วิธีประกาศแบบ Object จะชัดเจนกว่า
-  viewport: {
+};
+
+// 2. สร้าง function generateViewport แยกออกมาโดยเฉพาะ
+export function generateViewport() {
+  return {
     width: "device-width",
     initialScale: 1,
     maximumScale: 1,
     userScalable: false,
-  },
-};
+  };
+}
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={inter.className}>
+        {/* สามารถลบ <h1>TESTING 123</h1> ออกได้เลยครับ */}
         <AuthProvider>
           {children}
         </AuthProvider>
