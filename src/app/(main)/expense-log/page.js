@@ -13,6 +13,24 @@ export default function ExpenseLogPage() {
   const videoRef = React.useRef(null);
   const canvasRef = React.useRef(null);
   
+  // State สำหรับ custom modal
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmData, setConfirmData] = useState({ message: '', value: null, onConfirm: null });
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertData, setAlertData] = useState({ title: '', message: '', type: 'info' });
+  
+  // ฟังก์ชัน custom alert
+  const customAlert = (title, message, type = 'info') => {
+    setAlertData({ title, message, type });
+    setShowAlertModal(true);
+  };
+  
+  // ฟังก์ชัน custom confirm
+  const customConfirm = (message, value, onConfirm) => {
+    setConfirmData({ message, value, onConfirm });
+    setShowConfirmModal(true);
+  };
+  
   // ฟังก์ชันเปิดกล้องและเริ่มแสกนอัตโนมัติ
   const startAutoScan = async () => {
     setIsScanning(true);
@@ -139,11 +157,14 @@ export default function ExpenseLogPage() {
                 setIsScanning(false);
                 setScanStatus('');
                 
-                // ยืนยันกับผู้ใช้
-                const confirmed = confirm(`✅ อ่านเลขไมล์ได้: ${mileageValue.toLocaleString()} กม.\n\nต้องการใช้ค่านี้หรือไม่?`);
-                if (confirmed) {
-                  setMileage(mileageValue.toString());
-                }
+                // ยืนยันกับผู้ใช้ด้วย custom modal
+                customConfirm(
+                  `อ่านเลขไมล์ได้: ${mileageValue.toLocaleString()} กม.`,
+                  mileageValue,
+                  (value) => {
+                    setMileage(value.toString());
+                  }
+                );
                 
                 return;
               }
@@ -177,7 +198,7 @@ export default function ExpenseLogPage() {
       
     } catch (err) {
       console.error('Camera error:', err);
-      alert('❌ ไม่สามารถเข้าถึงกล้องได้\n\nกรุณาอนุญาตการใช้งานกล้องในเบราว์เซอร์');
+      customAlert('ไม่สามารถเข้าถึงกล้อง', 'กรุณาอนุญาตการใช้งานกล้องในเบราว์เซอร์', 'error');
       setIsScanning(false);
       setScanStatus('');
     }
@@ -527,6 +548,98 @@ export default function ExpenseLogPage() {
           </form>
         </div>
       </div>
+      
+      {/* Custom Alert Modal */}
+      {showAlertModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full animate-scale-in">
+            <div className={`p-6 rounded-t-2xl ${
+              alertData.type === 'error' ? 'bg-red-50' : 
+              alertData.type === 'success' ? 'bg-green-50' : 
+              'bg-blue-50'
+            }`}>
+              <div className="flex items-center justify-center mb-3">
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                  alertData.type === 'error' ? 'bg-red-100' : 
+                  alertData.type === 'success' ? 'bg-green-100' : 
+                  'bg-blue-100'
+                }`}>
+                  <span className="text-4xl">
+                    {alertData.type === 'error' ? '❌' : 
+                     alertData.type === 'success' ? '✅' : 
+                     'ℹ️'}
+                  </span>
+                </div>
+              </div>
+              <h3 className={`text-xl font-bold text-center mb-2 ${
+                alertData.type === 'error' ? 'text-red-700' : 
+                alertData.type === 'success' ? 'text-green-700' : 
+                'text-blue-700'
+              }`}>
+                {alertData.title}
+              </h3>
+              <p className="text-center text-gray-600">{alertData.message}</p>
+            </div>
+            <div className="p-4">
+              <button
+                onClick={() => setShowAlertModal(false)}
+                className={`w-full py-3 rounded-xl font-semibold text-white transition-all ${
+                  alertData.type === 'error' ? 'bg-red-600 hover:bg-red-700' : 
+                  alertData.type === 'success' ? 'bg-green-600 hover:bg-green-700' : 
+                  'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                ตกลง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Custom Confirm Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full animate-scale-in">
+            <div className="p-6 bg-teal-50 rounded-t-2xl">
+              <div className="flex items-center justify-center mb-3">
+                <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center">
+                  <span className="text-4xl">✅</span>
+                </div>
+              </div>
+              <h3 className="text-xl font-bold text-center mb-2 text-teal-700">
+                เจอเลขไมล์แล้ว!
+              </h3>
+              <p className="text-center text-gray-700 text-lg font-semibold">
+                {confirmData.message}
+              </p>
+              <p className="text-center text-gray-500 text-sm mt-2">
+                ต้องการใช้ค่านี้หรือไม่?
+              </p>
+            </div>
+            <div className="p-4 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                }}
+                className="flex-1 py-3 rounded-xl font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-all"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={() => {
+                  if (confirmData.onConfirm) {
+                    confirmData.onConfirm(confirmData.value);
+                  }
+                  setShowConfirmModal(false);
+                }}
+                className="flex-1 py-3 rounded-xl font-semibold text-white bg-teal-600 hover:bg-teal-700 transition-all"
+              >
+                ใช้ค่านี้
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
