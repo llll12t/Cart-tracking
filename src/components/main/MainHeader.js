@@ -20,7 +20,7 @@ export default function MainHeader({ userProfile, activeTab, setActiveTab }) {
   }, [pathname, setActiveTab]);
 
   return (
-    <div className="bg-gradient-to-b from-[#075b50] to-[#002629] px-6 pt-8 pb-24">
+    <div className="gradient-bg px-6 pt-8 pb-24">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full overflow-hidden border">
@@ -44,12 +44,7 @@ export default function MainHeader({ userProfile, activeTab, setActiveTab }) {
             <p className="text-sm text-teal-100">พนักงาน ขับ</p>
           </div>
         </div>
-        <button 
-          onClick={() => router.push('/vehicle-selection')}
-          className="px-6 py-2 bg-white text-teal-700 rounded-full font-semibold text-sm hover:bg-teal-50 transition-all"
-        >
-          🚗 เลือกรถ
-        </button>
+
       </div>
 
       {/* Tabs */}
@@ -65,7 +60,7 @@ export default function MainHeader({ userProfile, activeTab, setActiveTab }) {
               : 'bg-teal-500/40 text-teal-100 hover:bg-teal-500/70'
           }`}
         >
-          🚗 รถของฉัน
+           รถของฉัน
         </button>
         <button
           onClick={() => {
@@ -78,7 +73,7 @@ export default function MainHeader({ userProfile, activeTab, setActiveTab }) {
               : 'bg-teal-500/40 text-teal-100 hover:bg-teal-500/70'
           }`}
         >
-          📋 ประวัติ
+           ประวัติ
         </button>
       </div>
     </div>

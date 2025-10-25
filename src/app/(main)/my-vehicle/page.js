@@ -299,7 +299,7 @@ export default function MyVehiclePage() {
 
                 {/* Return Vehicle Button */}
                 <button onClick={() => setShowReturnModal(true)}
-                    className="w-full py-4 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-all shadow-lg"
+                    className="w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-all text-sm"
                 >
                       ส่งคืนรถ
                 </button>

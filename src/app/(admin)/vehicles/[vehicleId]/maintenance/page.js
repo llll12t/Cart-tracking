@@ -111,38 +111,24 @@ export default function MaintenancePage() {
             setRecords(recordsData);
         });
 
-        // ดึง expenses ที่เป็นค่าซ่อมบำรุง (maintenance, toll, parking, other) ผ่าน bookings
+        // ดึง expenses ที่ type='other' (ค่าใช้จ่ายทั่วไป) สำหรับรถคันนี้
         const fetchMaintenanceExpenses = async () => {
             try {
-                // ดึง bookings ของรถคันนี้
-                const bookingsSnap = await (await import('firebase/firestore')).getDocs(
-                    query(collection(db, 'bookings'), where('vehicleId', '==', vehicleId))
-                );
-                const bookingsMap = {};
-                bookingsSnap.docs.forEach(d => {
-                    bookingsMap[d.id] = d.data();
-                });
-                const bookingIds = Object.keys(bookingsMap);
-
-                if (bookingIds.length === 0) {
-                    setMaintenanceExpenses([]);
-                    setLoading(false);
-                    return;
-                }
-
-                // ดึง expenses ที่ไม่ใช่ fuel
                 const expensesSnap = await (await import('firebase/firestore')).getDocs(
-                    collection(db, 'expenses')
+                    query(
+                        collection(db, 'expenses'),
+                        where('vehicleId', '==', vehicleId),
+                        where('type', '==', 'other')
+                    )
                 );
-                const maintExps = expensesSnap.docs
-                    .map(d => ({ 
-                        id: d.id, 
-                        ...d.data(), 
-                        source: 'expenses',
-                        bookingData: bookingsMap[d.data().bookingId] // เก็บข้อมูล booking ไว้ด้วย
-                    }))
-                    .filter(exp => ['maintenance', 'toll', 'parking', 'other'].includes(exp.type) && bookingIds.includes(exp.bookingId));
+                
+                const maintExps = expensesSnap.docs.map(d => ({ 
+                    id: d.id, 
+                    ...d.data(), 
+                    source: 'expenses'
+                }));
 
+                console.log(`[DEBUG] Found ${maintExps.length} other expenses for vehicle ${vehicleId}`);
                 setMaintenanceExpenses(maintExps);
             } catch (e) {
                 console.error('Error fetching maintenance expenses:', e);
@@ -159,24 +145,17 @@ export default function MaintenancePage() {
     const allRecords = [
         ...records,
         ...maintenanceExpenses.map(exp => {
-            const typeMap = {
-                'maintenance': 'ค่าซ่อมบำรุง',
-                'toll': 'ค่าทางด่วน',
-                'parking': 'ค่าจอดรถ',
-                'other': 'อื่นๆ'
-            };
-            // ใช้ startDateTime จาก booking เป็นวันที่บันทึก
-            let date = exp.bookingData?.startDateTime;
-            // ถ้าไม่มี startDateTime ให้ใช้ createdAt หรือ date
-            if (!date) date = exp.createdAt || exp.date;
+            // ใช้ timestamp หรือ createdAt เป็นวันที่บันทึก
+            let date = exp.timestamp || exp.createdAt;
             // ถ้า date เป็น string ให้แปลงเป็น Date object
             if (date && typeof date === 'string') date = new Date(date);
+            
             return {
                 id: exp.id,
                 date,
                 finalMileage: exp.mileage || null,
                 type: 'cost-only',
-                vendor: typeMap[exp.type] || exp.type,
+                vendor: 'ค่าใช้จ่ายอื่นๆ',
                 details: exp.note || '-',
                 finalCost: exp.amount || 0,
                 maintenanceStatus: 'recorded',
@@ -239,8 +218,8 @@ export default function MaintenancePage() {
                             <p className="text-xl text-gray-600">{vehicle.brand} {vehicle.model} ({vehicle.licensePlate})</p>
                         </div>
                     </div>
-                    <button onClick={() => setShowForm(true)} className="px-4 py-2 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700">
-                        + เพิ่มรายการซ่อม
+                    <button onClick={() => setShowForm(true)} className="px-6 py-3 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 shadow-md transition-all hover:shadow-lg">
+                        + บันทึกค่าใช้จ่าย
                     </button>
                 </div>
             )}

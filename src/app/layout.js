@@ -25,7 +25,6 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className={inter.className}>
-        {/* สามารถลบ <h1>TESTING 123</h1> ออกได้เลยครับ */}
         <AuthProvider>
           {children}
         </AuthProvider>

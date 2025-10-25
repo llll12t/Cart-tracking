@@ -216,6 +216,8 @@ export default function VehiclesPage() {
 
       // enrich vehicles with driver name and latest fuel/fluid/maintenance log
       const enriched = await Promise.all(vehiclesData.map(async v => {
+        console.log(`[DEBUG] Processing vehicle: id=${v.id}, licensePlate=${v.licensePlate}`);
+        
         // Driver info (existing logic)
         if (v.driverId) {
           try {
@@ -269,47 +271,88 @@ export default function VehiclesPage() {
           const fr = await import('firebase/firestore');
           const { collection: col, query: qfn, where, orderBy, limit, getDocs } = fr;
           const expensesRef = col(db, 'expenses');
-          // Fuel
-          const fuelQ = qfn(
-            expensesRef,
-            where('vehicleId', '==', v.id),
-            where('type', '==', 'fuel'),
-            orderBy('timestamp', 'desc'),
-            limit(1)
-          );
-          const fuelSnap = await getDocs(fuelQ);
-          console.log(`[DEBUG] vehicleId=${v.id} fuel count:`, fuelSnap.size);
-          if (!fuelSnap.empty) {
-            v.latestFuel = fuelSnap.docs[0].data();
+          
+          // Fuel - ดึงทั้งหมดแล้วเรียงเอง (หลีกเลี่ยง composite index)
+          try {
+            const fuelQ = qfn(
+              expensesRef,
+              where('vehicleId', '==', v.id),
+              where('type', '==', 'fuel')
+            );
+            const fuelSnap = await getDocs(fuelQ);
+            console.log(`[DEBUG] vehicleId=${v.id} fuel count:`, fuelSnap.size);
+            if (!fuelSnap.empty) {
+              // เรียงเองใน JavaScript
+              const fuelDocs = fuelSnap.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .sort((a, b) => {
+                  const aTime = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp);
+                  const bTime = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp);
+                  return bTime - aTime;
+                });
+              v.latestFuel = fuelDocs[0];
+            }
+          } catch (e) {
+            console.error(`[ERROR] Failed to fetch fuel for vehicle ${v.id}:`, e.message);
           }
+          
           // Fluid
-          const fluidQ = qfn(
-            expensesRef,
-            where('vehicleId', '==', v.id),
-            where('type', '==', 'fluid'),
-            orderBy('timestamp', 'desc'),
-            limit(1)
-          );
-          const fluidSnap = await getDocs(fluidQ);
-          console.log(`[DEBUG] vehicleId=${v.id} fluid count:`, fluidSnap.size);
-          if (!fluidSnap.empty) {
-            v.latestFluid = fluidSnap.docs[0].data();
+          try {
+            const fluidQ = qfn(
+              expensesRef,
+              where('vehicleId', '==', v.id),
+              where('type', '==', 'fluid')
+            );
+            const fluidSnap = await getDocs(fluidQ);
+            console.log(`[DEBUG] vehicleId=${v.id} fluid count:`, fluidSnap.size);
+            if (!fluidSnap.empty) {
+              const fluidDocs = fluidSnap.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .sort((a, b) => {
+                  const aTime = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(a.timestamp);
+                  const bTime = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(b.timestamp);
+                  return bTime - aTime;
+                });
+              v.latestFluid = fluidDocs[0];
+            }
+          } catch (e) {
+            console.error(`[ERROR] Failed to fetch fluid for vehicle ${v.id}:`, e.message);
           }
-          // Maintenance
-          const maintenanceQ = qfn(
-            expensesRef,
-            where('vehicleId', '==', v.id),
-            where('type', '==', 'maintenance'),
-            orderBy('timestamp', 'desc'),
-            limit(1)
-          );
-          const maintenanceSnap = await getDocs(maintenanceQ);
-          console.log(`[DEBUG] vehicleId=${v.id} maintenance count:`, maintenanceSnap.size);
-          if (!maintenanceSnap.empty) {
-            v.latestMaintenance = maintenanceSnap.docs[0].data();
+          
+          // Maintenance - ดึงจาก collection maintenances
+          try {
+            const maintenancesRef = col(db, 'maintenances');
+            const maintenanceQ = qfn(
+              maintenancesRef,
+              where('vehicleId', '==', v.id)
+            );
+            const maintenanceSnap = await getDocs(maintenanceQ);
+            console.log(`[DEBUG] vehicleId=${v.id} maintenance count:`, maintenanceSnap.size);
+            if (!maintenanceSnap.empty) {
+              const maintenanceDocs = maintenanceSnap.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .sort((a, b) => {
+                  // ใช้ receivedAt หรือ createdAt สำหรับเรียง
+                  const aTime = a.receivedAt?.toDate ? a.receivedAt.toDate() : 
+                                (a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0));
+                  const bTime = b.receivedAt?.toDate ? b.receivedAt.toDate() : 
+                                (b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0));
+                  return bTime - aTime;
+                });
+              
+              // ใช้ข้อมูลจาก maintenance record
+              const latest = maintenanceDocs[0];
+              v.latestMaintenance = {
+                mileage: latest.finalMileage || latest.odometerAtDropOff || null,
+                amount: latest.finalCost || null,
+                note: latest.type || latest.details || null
+              };
+            }
+          } catch (e) {
+            console.error(`[ERROR] Failed to fetch maintenance for vehicle ${v.id}:`, e.message);
           }
         } catch (e) {
-          // ignore lookup failures
+          console.error('[ERROR] Failed to import firestore:', e);
         }
 
         return v;

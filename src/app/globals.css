@@ -4,7 +4,6 @@
   --background: #ffffff;
   --foreground: #171717;
   --font-base:#000000;
-
 }
 
 @theme inline {
@@ -12,6 +11,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,6 +27,15 @@ body {
   color: var(--font-base);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.gradient-bg {
+  background-image: linear-gradient(to bottom, #075b50, #002629);
+  padding-left: 1.5rem; /* 24px */
+  padding-right: 1.5rem; /* 24px */
+  padding-top: 2rem; /* 32px */
+  padding-bottom: 6rem; /* 96px */
+}
+
 
 /* Animation for modal */
 @keyframes scale-in {

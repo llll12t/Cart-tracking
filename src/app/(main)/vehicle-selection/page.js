@@ -110,14 +110,9 @@ export default function VehicleSelectionPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-gradient-to-r from-teal-500 to-teal-600 text-white p-6 pb-24">
+      <div className="gradient-bg px-6 pt-8 pb-24">
         <div className="flex items-center gap-3 mb-2">
-          <button onClick={() => router.back()} className="p-2 hover:bg-white/20 rounded-lg">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <h1 className="text-2xl font-bold">เลือกรถที่ต้องการใช้งาน</h1>
+          <h1 className="text-xl font-bold text-white">เลือกรถที่ต้องการใช้งาน</h1>
         </div>
         <p className="text-teal-100 text-sm">เลือกรถที่พร้อมใช้งานและเริ่มเดินทางได้ทันที</p>
       </div>

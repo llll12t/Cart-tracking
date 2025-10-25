@@ -204,12 +204,6 @@ export default function MyTripsPage() {
                         </svg>
                         <h3 className="text-xl font-semibold text-gray-800 mb-2">ยังไม่มีประวัติการใช้งาน</h3>
                         <p className="text-gray-600 mb-6">เริ่มใช้งานรถเพื่อดูประวัติการเดินทาง</p>
-                        <button
-                            onClick={() => router.push('/vehicle-selection')}
-                            className="px-6 py-3 bg-teal-600 text-white rounded-full font-semibold hover:bg-teal-700 transition-all"
-                        >
-                            เลือกรถเลย
-                        </button>
                     </div>
                 )}
             </div>
