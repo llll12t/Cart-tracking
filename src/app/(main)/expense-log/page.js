@@ -6,87 +6,180 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 
 export default function ExpenseLogPage() {
-  // Modal สำหรับแสดงกล้อง
-  const [showCamera, setShowCamera] = useState(false);
-  const [cameraStream, setCameraStream] = useState(null);
+  // State สำหรับการแสกน
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanStatus, setScanStatus] = useState('');
+  const scanIntervalRef = React.useRef(null);
   const videoRef = React.useRef(null);
   const canvasRef = React.useRef(null);
-  // ฟังก์ชันเปิดกล้อง
-  const openCamera = async () => {
-    setShowCamera(true);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { exact: "environment" } }
-      });
-      setCameraStream(stream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (err) {
-      alert('ไม่สามารถเปิดกล้องได้');
-      setShowCamera(false);
-    }
-  };
-  // ฟังก์ชันถ่ายภาพและ OCR
-  const handleCapture = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    const ctx = canvasRef.current.getContext('2d');
-    ctx.drawImage(videoRef.current, 0, 0, 320, 240);
-    const imageData = canvasRef.current.toDataURL('image/jpeg', 0.95);
-    setShowCamera(false);
-    if (cameraStream) {
-      cameraStream.getTracks().forEach(track => track.stop());
-      setCameraStream(null);
-    }
+  
+  // ฟังก์ชันเปิดกล้องและเริ่มแสกนอัตโนมัติ
+  const startAutoScan = async () => {
+    setIsScanning(true);
+    setScanStatus('กำลังเปิดกล้อง...');
     
     try {
-      // OCR ด้วย Tesseract.js
-      console.log('เริ่มทำ OCR...');
-      const { createWorker } = await import('tesseract.js');
+      // เปิดกล้อง
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
       
+      // สร้าง video element
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.setAttribute('autoplay', '');
+      video.setAttribute('playsinline', '');
+      video.play();
+      
+      // รอให้ video พร้อม
+      await new Promise(resolve => {
+        video.onloadedmetadata = resolve;
+      });
+      
+      setScanStatus('📸 กำลังมองหาเลขไมล์...');
+      
+      // สร้าง canvas สำหรับจับภาพ
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      
+      // สร้าง modal แสดงกล้อง
+      const modal = document.createElement('div');
+      modal.id = 'scanModal';
+      modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;';
+      modal.innerHTML = `
+        <div style="color:white;margin-bottom:20px;text-align:center;">
+          <p style="font-size:20px;font-weight:bold;margin-bottom:8px;">📸 แสกนเลขไมล์อัตโนมัติ</p>
+          <p id="scanStatusText" style="font-size:14px;color:#93c5fd;">กำลังมองหาเลขไมล์...</p>
+        </div>
+        <div style="position:relative;width:100%;max-width:500px;">
+          <video id="scanVideo" autoplay playsinline style="width:100%;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.3);"></video>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border:2px dashed #0d9488;width:80%;height:40%;border-radius:8px;pointer-events:none;"></div>
+        </div>
+        <div style="margin-top:24px;display:flex;gap:12px;">
+          <button id="cancelScanBtn" style="padding:14px 28px;background:#6b7280;color:white;border:none;border-radius:10px;font-weight:600;font-size:16px;cursor:pointer;">✕ ยกเลิก</button>
+        </div>
+        <div style="color:#93c5fd;margin-top:16px;font-size:12px;text-align:center;">
+          <p>💡 วางกล้องให้เห็นเลขไมล์ชัดเจนในกรอบ</p>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      
+      const modalVideo = document.getElementById('scanVideo');
+      const statusText = document.getElementById('scanStatusText');
+      modalVideo.srcObject = stream;
+      
+      // โหลด Tesseract worker
+      setScanStatus('⏳ กำลังเตรียมเครื่องมืออ่านข้อความ...');
+      statusText.textContent = 'กำลังเตรียมเครื่องมืออ่านข้อความ...';
+      
+      const { createWorker } = await import('tesseract.js');
       const worker = await createWorker('eng', 1, {
         logger: m => {
           if (m.status === 'recognizing text') {
-            console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
+            const progress = Math.round(m.progress * 100);
+            statusText.textContent = `กำลังวิเคราะห์ภาพ... ${progress}%`;
           }
         }
       });
       
-      console.log('กำลังอ่านภาพ...');
-      const { data: { text } } = await worker.recognize(imageData);
-      await worker.terminate();
+      let scanCount = 0;
+      let isProcessing = false;
       
-      console.log('OCR Result:', text);
-      
-      // Extract all numbers from text
-      const numbers = text.match(/\d+/g);
-      console.log('Numbers found:', numbers);
-      
-      if (numbers && numbers.length > 0) {
-        // Find the largest number (most likely to be mileage)
-        const sortedNumbers = numbers.map(n => parseInt(n)).sort((a, b) => b - a);
-        const mileageValue = sortedNumbers[0];
+      // ฟังก์ชันแสกนทุก 2 วินาที
+      const scanFrame = async () => {
+        if (isProcessing) return;
         
-        console.log('Detected mileage:', mileageValue);
+        isProcessing = true;
+        scanCount++;
         
-        // Validate
-        const minValue = lastFuelMileage || activeUsage?.startMileage || 0;
-        if (mileageValue < minValue) {
-          alert(`⚠️ เลขไมล์ที่อ่านได้ (${mileageValue.toLocaleString()}) น้อยกว่าค่าปัจจุบัน (${minValue.toLocaleString()})\n\nกรุณาลองใหม่หรือกรอกด้วยตนเอง`);
-          return;
+        try {
+          // จับภาพจาก video
+          ctx.drawImage(modalVideo, 0, 0);
+          const imageData = canvas.toDataURL('image/jpeg', 0.95);
+          
+          statusText.textContent = `🔍 กำลังอ่านเลขไมล์... (ครั้งที่ ${scanCount})`;
+          
+          // ทำ OCR
+          const { data: { text } } = await worker.recognize(imageData);
+          
+          console.log(`Scan ${scanCount}:`, text);
+          
+          // หาตัวเลขในภาพ
+          const numbers = text.match(/\d+/g);
+          
+          if (numbers && numbers.length > 0) {
+            // หาเลขที่ใหญ่ที่สุด
+            const sortedNumbers = numbers.map(n => parseInt(n)).sort((a, b) => b - a);
+            const mileageValue = sortedNumbers[0];
+            
+            // ตรวจสอบว่าเป็นเลขไมล์ที่สมเหตุสมผล (มากกว่า 100 และไม่เกิน 9,999,999)
+            if (mileageValue >= 100 && mileageValue <= 9999999) {
+              const minValue = lastFuelMileage || activeUsage?.startMileage || 0;
+              
+              if (mileageValue >= minValue) {
+                // เจอเลขไมล์แล้ว!
+                console.log('✅ Found valid mileage:', mileageValue);
+                
+                // หยุดแสกน
+                clearInterval(scanIntervalRef.current);
+                await worker.terminate();
+                
+                // ปิดกล้อง
+                stream.getTracks().forEach(track => track.stop());
+                
+                // แสดง confirmation
+                statusText.textContent = '✅ เจอเลขไมล์แล้ว!';
+                statusText.style.color = '#10b981';
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                document.body.removeChild(modal);
+                setIsScanning(false);
+                setScanStatus('');
+                
+                // ยืนยันกับผู้ใช้
+                const confirmed = confirm(`✅ อ่านเลขไมล์ได้: ${mileageValue.toLocaleString()} กม.\n\nต้องการใช้ค่านี้หรือไม่?`);
+                if (confirmed) {
+                  setMileage(mileageValue.toString());
+                }
+                
+                return;
+              }
+            }
+          }
+          
+          statusText.textContent = `🔍 กำลังมองหาเลขไมล์... (ครั้งที่ ${scanCount})`;
+          
+        } catch (error) {
+          console.error('Scan error:', error);
         }
         
-        // Confirm with user
-        const confirmed = confirm(`✅ อ่านเลขไมล์ได้: ${mileageValue.toLocaleString()} กม.\n\nต้องการใช้ค่านี้หรือไม่?`);
-        if (confirmed) {
-          setMileage(mileageValue.toString());
-        }
-      } else {
-        alert('❌ ไม่พบตัวเลขในภาพ\n\nกรุณาลองใหม่หรือกรอกด้วยตนเอง');
-      }
-    } catch (error) {
-      console.error('OCR Error:', error);
-      alert('❌ ไม่สามารถอ่านเลขไมล์ได้\n\nกรุณาลองใหม่หรือกรอกด้วยตนเอง\n\nError: ' + error.message);
+        isProcessing = false;
+      };
+      
+      // เริ่มแสกนทุก 2 วินาที
+      scanIntervalRef.current = setInterval(scanFrame, 2000);
+      
+      // แสกนครั้งแรกทันที
+      setTimeout(scanFrame, 500);
+      
+      // ปุ่มยกเลิก
+      document.getElementById('cancelScanBtn').onclick = () => {
+        clearInterval(scanIntervalRef.current);
+        worker.terminate();
+        stream.getTracks().forEach(track => track.stop());
+        document.body.removeChild(modal);
+        setIsScanning(false);
+        setScanStatus('');
+      };
+      
+    } catch (err) {
+      console.error('Camera error:', err);
+      alert('❌ ไม่สามารถเข้าถึงกล้องได้\n\nกรุณาอนุญาตการใช้งานกล้องในเบราว์เซอร์');
+      setIsScanning(false);
+      setScanStatus('');
     }
   };
   // State สำหรับรายการเติมน้ำมันล่าสุด
@@ -386,33 +479,13 @@ export default function ExpenseLogPage() {
                 />
                 <button
                   type="button"
-                  onClick={openCamera}
-                  className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-blue-700 transition-all whitespace-nowrap"
-                  title="แสกนเลขไมล์จากรถ"
+                  onClick={startAutoScan}
+                  disabled={isScanning}
+                  className="px-4 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="แสกนเลขไมล์อัตโนมัติ"
                 >
-                   แสกน
+                  {isScanning ? '⏳ กำลังแสกน...' : '📷 แสกน'}
                 </button>
-                {/* Modal กล้องถ่ายเลขไมล์ */}
-                {showCamera && (
-                  <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-4 flex flex-col items-center">
-                      <video ref={videoRef} width={320} height={240} autoPlay playsInline className="rounded border mb-2" />
-                      <canvas ref={canvasRef} width={320} height={240} style={{ display: 'none' }} />
-                      <button
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold mt-2"
-                        onClick={handleCapture}
-                      >ถ่ายภาพเลขไมล์</button>
-                      <button
-                        className="px-4 py-2 bg-gray-400 text-white rounded-lg font-bold mt-2"
-                        onClick={() => {
-                          setShowCamera(false);
-                          if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
-                          setCameraStream(null);
-                        }}
-                      >ปิด</button>
-                    </div>
-                  </div>
-                )}
               </div>
               <p className="text-xs text-gray-500 mt-1">
                 {(type === "fuel") && "บังคับกรอกเมื่อเติมน้ำมัน - กดแสกนเพื่อใช้เลขไมล์จากภาพ"}
