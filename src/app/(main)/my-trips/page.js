@@ -66,102 +66,59 @@ function UsageHistoryCard({ usage }) {
     const totalDistance = usage.totalDistance || (usage.endMileage && usage.startMileage ? usage.endMileage - usage.startMileage : 0);
 
     return (
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-4">
-            <div className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                usage.status === 'active' 
-                                    ? 'bg-green-100 text-green-700' 
-                                    : 'bg-gray-100 text-gray-700'
-                            }`}>
-                                {usage.status === 'active' ? '🚗 กำลังใช้งาน' : '✅ เสร็จสิ้น'}
-                            </span>
-                        </div>
-                        <h3 className="font-semibold text-gray-800 text-lg">
-                            {usage.vehicleLicensePlate || vehicle?.licensePlate || 'ไม่ระบุทะเบียน'}
-                        </h3>
-                        <p className="text-sm text-gray-600">{vehicle?.brand} {vehicle?.model}</p>
-                    </div>
-                    {getImageUrl(vehicle) && (
-                        <Image 
-                            src={getImageUrl(vehicle)} 
-                            alt="vehicle" 
-                            width={80}
-                            height={80}
-                            className="w-20 h-20 object-cover rounded-lg"
-                            unoptimized
-                        />
-                    )}
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-2">
+            <div className="p-2">
+                <div className="flex items-center gap-2 mb-1">
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        usage.status === 'active' 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-gray-100 text-gray-700'
+                    }`}>
+                        {usage.status === 'active' ? ' กำลังใช้งาน' : ' เสร็จสิ้น'}
+                    </span>
+                    <span className="font-semibold text-gray-800 text-sm">
+                        {usage.vehicleLicensePlate || vehicle?.licensePlate || 'ไม่ระบุทะเบียน'}
+                    </span>
+                    <span className="text-xs text-gray-500">{vehicle?.brand} {vehicle?.model}</span>
                 </div>
-
-                <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center py-2 border-b">
-                        <span className="text-gray-600">เริ่มใช้งาน:</span>
-                        <span className="font-medium">{formatDateTime(usage.startTime)}</span>
-                    </div>
-                    {usage.endTime && (
-                        <div className="flex justify-between items-center py-2 border-b">
-                            <span className="text-gray-600">ส่งคืนรถ:</span>
-                            <span className="font-medium">{formatDateTime(usage.endTime)}</span>
-                        </div>
-                    )}
-                        {/* เลขไมล์เริ่ม-สิ้นสุด ไม่ต้องแสดง */}
-                    {totalDistance > 0 && (
-                        <div className="flex justify-between items-center py-2 border-b">
-                            <span className="text-gray-600">ระยะทางรวม:</span>
-                            <span className="font-medium text-teal-600">{totalDistance.toLocaleString()} กม.</span>
-                        </div>
-                    )}
-                    {usage.destination && (
-                        <div className="flex justify-between items-center py-2 border-b">
-                            <span className="text-gray-600">จุดหมาย:</span>
-                            <span className="font-medium">{usage.destination}</span>
-                        </div>
-                    )}
+                <div className="flex flex-wrap gap-2 text-xs text-gray-600 mb-1">
+                    <span>เริ่ม: <span className="font-medium">{formatDateTime(usage.startTime)}</span></span>
+                    {usage.endTime && <span>คืน: <span className="font-medium">{formatDateTime(usage.endTime)}</span></span>}
+                    {totalDistance > 0 && <span>ระยะทาง: <span className="font-medium text-teal-600">{totalDistance.toLocaleString()} กม.</span></span>}
+                    {usage.destination && <span>จุดหมาย: <span className="font-medium">{usage.destination}</span></span>}
                 </div>
-
                 {(usage.purpose || expenses.length > 0) && (
                     <button
                         onClick={() => setIsExpanded(!isExpanded)}
-                        className="mt-3 text-sm text-teal-600 font-medium flex items-center gap-1"
+                        className="text-xs text-teal-600 font-medium flex items-center gap-1"
                     >
-                        {isExpanded ? 'ซ่อนรายละเอียด' : 'แสดงรายละเอียด'}
-                        <svg className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        {isExpanded ? 'ซ่อนรายละเอียด' : 'ดูรายละเอียด'}
+                        <svg className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                     </button>
                 )}
-
                 {isExpanded && (
-                    <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
+                    <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
                         {usage.purpose && (
                             <div>
-                                <p className="text-sm font-medium text-gray-700 mb-1">วัตถุประสงค์:</p>
-                                <p className="text-sm text-gray-600">{usage.purpose}</p>
+                                <span className="text-xs font-medium text-gray-700">วัตถุประสงค์:</span>
+                                <span className="text-xs text-gray-600 ml-1">{usage.purpose}</span>
                             </div>
                         )}
-                        
                         {expenses.length > 0 && (
                             <div>
-                                <p className="text-sm font-medium text-gray-700 mb-2">ค่าใช้จ่าย ({expenses.length} รายการ):</p>
-                                <div className="space-y-2">
+                                <span className="text-xs font-medium text-gray-700">ค่าใช้จ่าย ({expenses.length}):</span>
+                                <div className="space-y-1 mt-1">
                                     {expenses.map(expense => (
-                                        <div key={expense.id} className="flex justify-between items-start py-2 border-b border-gray-50">
-                                            <div>
-                                                <div className="text-sm font-medium">{getExpenseTypeText(expense.type)}</div>
-                                                {expense.note && <div className="text-xs text-gray-500 mt-0.5">{expense.note}</div>}
-                                                {/* ไม่ต้องแสดงไมล์เริ่มต้นหรือสิ้นสุดในรายละเอียดค่าใช้จ่าย */}
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="font-medium text-teal-600">{expense.amount.toLocaleString()} ฿</div>
-                                            </div>
+                                        <div key={expense.id} className="flex justify-between items-center py-1 border-b border-gray-50">
+                                            <span className="text-xs font-medium">{getExpenseTypeText(expense.type)}</span>
+                                            <span className="text-xs text-teal-600 font-medium">{expense.amount.toLocaleString()} ฿</span>
                                         </div>
                                     ))}
-                                    <div className="flex justify-between items-center pt-2 border-t-2 border-gray-200">
-                                        <span className="font-semibold text-gray-800">รวมทั้งหมด:</span>
-                                        <span className="font-bold text-teal-600">{totalExpenses.toLocaleString()} ฿</span>
+                                    <div className="flex justify-between items-center pt-1 border-t border-gray-200">
+                                        <span className="font-semibold text-gray-800 text-xs">รวม:</span>
+                                        <span className="font-bold text-teal-600 text-xs">{totalExpenses.toLocaleString()} ฿</span>
                                     </div>
                                 </div>
                             </div>
@@ -220,9 +177,8 @@ export default function MyTripsPage() {
         return (
             <div className="min-h-screen bg-gray-50">
                 <MainHeader userProfile={userProfile} activeTab={activeTab} setActiveTab={setActiveTab} />
-                <div className="px-4 py-6 -mt-16">
+                <div className="bg-white px-4 py-2 -mt-16">
                     <div className="text-center py-12">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
                         <p className="text-gray-600">กำลังโหลดข้อมูล...</p>
                     </div>
                 </div>
@@ -234,8 +190,7 @@ export default function MyTripsPage() {
         <div className="min-h-screen bg-gray-50">
             <MainHeader userProfile={userProfile} activeTab={activeTab} setActiveTab={setActiveTab} />
 
-            <div className="px-4 py-2 -mt-16">
-                <h2 className="bg-white rounded-xl shadow-sm p-8 mb-2 text-center">ประวัติการใช้งานรถ</h2>
+            <div className="bg-white px-4 py-2 -mt-16">
 
                 {usageHistory.length > 0 ? (
                     <div className="space-y-4 pb-8">

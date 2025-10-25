@@ -15,7 +15,9 @@ export default function ExpenseLogPage() {
   const openCamera = async () => {
     setShowCamera(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { exact: "environment" } }
+      });
       setCameraStream(stream);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -46,8 +48,7 @@ export default function ExpenseLogPage() {
     await worker.terminate();
     const match = text.match(/\d{4,7}/);
     if (match) {
-      setMileage(match[0]);
-      alert('เลขไมล์ที่อ่านได้: ' + match[0]);
+      setMileage(match[0]); // กรอกเลขไมล์ลง input ทันที
     } else {
       alert('ไม่พบเลขไมล์ในภาพ กรุณากรอกเอง');
     }
@@ -350,10 +351,10 @@ export default function ExpenseLogPage() {
                 <button
                   type="button"
                   onClick={openCamera}
-                  className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all whitespace-nowrap"
+                  className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-blue-700 transition-all whitespace-nowrap"
                   title="แสกนเลขไมล์จากรถ"
                 >
-                  📸 แสกน
+                   แสกน
                 </button>
                 {/* Modal กล้องถ่ายเลขไมล์ */}
                 {showCamera && (
@@ -415,24 +416,6 @@ export default function ExpenseLogPage() {
               {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกค่าใช้จ่าย'}
             </button>
           </form>
-        </div>
-
-        {/* Info Card */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <svg className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div className="text-sm text-blue-800">
-              <p className="font-semibold mb-1">คำแนะนำ:</p>
-              <ul className="list-disc list-inside space-y-1 text-blue-700">
-                <li>บันทึกค่าใช้จ่ายทันทีหลังจากจ่ายเงิน</li>
-                <li>เลขไมล์ไม่บังคับ แต่แนะนำให้บันทึก</li>
-                <li>สามารถบันทึกได้หลายครั้งระหว่างการใช้งาน</li>
-                <li>ข้อมูลจะแสดงในหน้ารถที่กำลังใช้งาน</li>
-              </ul>
-            </div>
-          </div>
         </div>
       </div>
     </div>

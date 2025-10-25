@@ -243,23 +243,6 @@ export default function VehicleSelectionPage() {
           </form>
         </div>
 
-        {/* Info Card */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <svg className="w-6 h-6 text-blue-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div className="text-sm text-blue-800">
-              <p className="font-semibold mb-1">ข้อมูลสำคัญ:</p>
-              <ul className="list-disc list-inside space-y-1 text-blue-700">
-                <li>ไม่ต้องรออนุมัติ - เลือกรถและใช้งานได้ทันที</li>
-                <li>ตรวจสอบเลขไมล์ก่อนออกเดินทาง</li>
-                <li>บันทึกค่าใช้จ่ายระหว่างการใช้งาน</li>
-                <li>กดส่งคืนรถเมื่อใช้งานเสร็จ</li>
-              </ul>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
