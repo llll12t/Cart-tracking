@@ -69,11 +69,10 @@ function UsageHistoryCard({ usage }) {
         <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-2">
             <div className="p-2">
                 <div className="flex items-center gap-2 mb-1">
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        usage.status === 'active' 
-                            ? 'bg-green-100 text-green-700' 
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${usage.status === 'active'
+                            ? 'bg-green-100 text-green-700'
                             : 'bg-gray-100 text-gray-700'
-                    }`}>
+                        }`}>
                         {usage.status === 'active' ? ' กำลังใช้งาน' : ' เสร็จสิ้น'}
                     </span>
                     <span className="font-semibold text-gray-800 text-sm">
@@ -145,9 +144,9 @@ export default function MyTripsPage() {
         }
 
         // Query vehicle-usage collection for this user's history
-            const q = query(
-                collection(db, "vehicle-usage"),
-                where("userId", "==", userProfile?.lineId || user.uid),
+        const q = query(
+            collection(db, "vehicle-usage"),
+            where("userId", "==", userProfile?.lineId || user.uid),
             orderBy("startTime", "desc")
         );
 

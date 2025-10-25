@@ -32,25 +32,61 @@ export default function ExpenseLogPage() {
     if (!videoRef.current || !canvasRef.current) return;
     const ctx = canvasRef.current.getContext('2d');
     ctx.drawImage(videoRef.current, 0, 0, 320, 240);
-    const imageData = canvasRef.current.toDataURL('image/png');
+    const imageData = canvasRef.current.toDataURL('image/jpeg', 0.95);
     setShowCamera(false);
     if (cameraStream) {
       cameraStream.getTracks().forEach(track => track.stop());
       setCameraStream(null);
     }
-    // OCR ด้วย Tesseract.js
-    const { createWorker } = await import('tesseract.js');
-    const worker = await createWorker('tha', 1);
-    await worker.load();
-    await worker.loadLanguage('eng');
-    await worker.initialize('eng');
-    const { data: { text } } = await worker.recognize(imageData);
-    await worker.terminate();
-    const match = text.match(/\d{4,7}/);
-    if (match) {
-      setMileage(match[0]); // กรอกเลขไมล์ลง input ทันที
-    } else {
-      alert('ไม่พบเลขไมล์ในภาพ กรุณากรอกเอง');
+    
+    try {
+      // OCR ด้วย Tesseract.js
+      console.log('เริ่มทำ OCR...');
+      const { createWorker } = await import('tesseract.js');
+      
+      const worker = await createWorker('eng', 1, {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            console.log(`OCR Progress: ${Math.round(m.progress * 100)}%`);
+          }
+        }
+      });
+      
+      console.log('กำลังอ่านภาพ...');
+      const { data: { text } } = await worker.recognize(imageData);
+      await worker.terminate();
+      
+      console.log('OCR Result:', text);
+      
+      // Extract all numbers from text
+      const numbers = text.match(/\d+/g);
+      console.log('Numbers found:', numbers);
+      
+      if (numbers && numbers.length > 0) {
+        // Find the largest number (most likely to be mileage)
+        const sortedNumbers = numbers.map(n => parseInt(n)).sort((a, b) => b - a);
+        const mileageValue = sortedNumbers[0];
+        
+        console.log('Detected mileage:', mileageValue);
+        
+        // Validate
+        const minValue = lastFuelMileage || activeUsage?.startMileage || 0;
+        if (mileageValue < minValue) {
+          alert(`⚠️ เลขไมล์ที่อ่านได้ (${mileageValue.toLocaleString()}) น้อยกว่าค่าปัจจุบัน (${minValue.toLocaleString()})\n\nกรุณาลองใหม่หรือกรอกด้วยตนเอง`);
+          return;
+        }
+        
+        // Confirm with user
+        const confirmed = confirm(`✅ อ่านเลขไมล์ได้: ${mileageValue.toLocaleString()} กม.\n\nต้องการใช้ค่านี้หรือไม่?`);
+        if (confirmed) {
+          setMileage(mileageValue.toString());
+        }
+      } else {
+        alert('❌ ไม่พบตัวเลขในภาพ\n\nกรุณาลองใหม่หรือกรอกด้วยตนเอง');
+      }
+    } catch (error) {
+      console.error('OCR Error:', error);
+      alert('❌ ไม่สามารถอ่านเลขไมล์ได้\n\nกรุณาลองใหม่หรือกรอกด้วยตนเอง\n\nError: ' + error.message);
     }
   };
   // State สำหรับรายการเติมน้ำมันล่าสุด
