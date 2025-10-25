@@ -20,6 +20,8 @@ export default function VehiclesAnalysisPage() {
     averageFuelEfficiency: 0,
     costPerKm: 0,
   });
+  // ช่องกำหนด threshold
+  const [threshold, setThreshold] = useState(10);
 
   useEffect(() => {
     const fetchVehicles = async () => {
@@ -36,6 +38,109 @@ export default function VehiclesAnalysisPage() {
     };
     fetchVehicles();
   }, []);
+
+  // Run analysis after vehicles are loaded
+  useEffect(() => {
+    if (vehicles.length > 0) {
+      setSelectedVehicle('all');
+    }
+  }, [vehicles]);
+
+  // Always fetch analysis when vehicles are loaded (initial load)
+  useEffect(() => {
+    if (vehicles.length > 0 && selectedVehicle === 'all') {
+      // force analysis fetch for initial load
+      const fetchAnalysisData = async () => {
+        setLoading(true);
+        try {
+          const now = new Date();
+          let startDateTime = new Date();
+          let endDateTime = now;
+
+          switch (dateRange) {
+            case 'today':
+              startDateTime.setHours(0, 0, 0, 0);
+              break;
+            case 'week':
+              startDateTime.setDate(now.getDate() - 7);
+              break;
+            case 'month':
+              startDateTime.setMonth(now.getMonth() - 1);
+              break;
+            case 'custom':
+              if (startDate && endDate) {
+                startDateTime = new Date(startDate);
+                endDateTime = new Date(endDate);
+              }
+              break;
+          }
+
+          let expensesQuery = query(collection(db, 'expenses'), orderBy('timestamp', 'desc'));
+          const expensesSnap = await getDocs(expensesQuery);
+          let allExpenses = expensesSnap.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp?.toDate ? doc.data().timestamp.toDate() : new Date(doc.data().timestamp)
+          }));
+
+          allExpenses = allExpenses.filter(exp => {
+            const expDate = exp.timestamp;
+            return expDate >= startDateTime && expDate <= endDateTime;
+          });
+
+          const fuelExpenses = allExpenses.filter(exp => exp.type === 'fuel' && exp.mileage);
+          const sortedFuelExpenses = [...fuelExpenses].sort((a, b) => a.mileage - b.mileage);
+          const fuelRecords = sortedFuelExpenses.map((exp, index) => {
+            let distanceTraveled = 0;
+            let fuelEfficiency = null;
+            let costPerKm = null;
+            if (index > 0) {
+              const prevExp = sortedFuelExpenses[index - 1];
+              distanceTraveled = exp.mileage - prevExp.mileage;
+              if (distanceTraveled > 0 && exp.amount > 0) {
+                const fuelPrice = 40;
+                const liters = exp.amount / fuelPrice;
+                fuelEfficiency = distanceTraveled / liters;
+                costPerKm = exp.amount / distanceTraveled;
+              }
+            }
+            return { ...exp, distanceTraveled, fuelEfficiency, costPerKm };
+          });
+          const validEfficiencies = fuelRecords.filter(r => r.fuelEfficiency !== null);
+          const avgFuelEfficiency = validEfficiencies.length > 0
+            ? validEfficiencies.reduce((sum, r) => sum + r.fuelEfficiency, 0) / validEfficiencies.length
+            : 0;
+          const totalExpenses = allExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+          const totalFuelExpenses = fuelExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+          let totalDistance = vehicles.reduce((sum, v) => {
+            const vStartMileage = v.currentMileage !== undefined && v.currentMileage !== null ? Number(v.currentMileage) : null;
+            const vFuelRecords = fuelExpenses.filter(r => r.vehicleId === v.id && r.mileage !== undefined && r.mileage !== null);
+            if (vFuelRecords.length > 0 && vStartMileage !== null) {
+              const maxMileage = Math.max(...vFuelRecords.map(r => Number(r.mileage)));
+              return sum + (maxMileage - vStartMileage);
+            }
+            return sum;
+          }, 0);
+          const totalTrips = fuelRecords.length;
+          const costPerKm = totalDistance > 0 ? totalExpenses / totalDistance : 0;
+          setAnalysisData({
+            totalTrips,
+            totalDistance,
+            totalExpenses,
+            totalFuelExpenses,
+            fuelRecords: fuelRecords.reverse(),
+            averageFuelEfficiency: avgFuelEfficiency,
+            costPerKm,
+          });
+        } catch (error) {
+          console.error('Error fetching analysis data:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchAnalysisData();
+    }
+  }, [vehicles, selectedVehicle, dateRange, startDate, endDate]);
 
   useEffect(() => {
     const fetchAnalysisData = async () => {
@@ -111,28 +216,37 @@ export default function VehiclesAnalysisPage() {
         const totalExpenses = allExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
         const totalFuelExpenses = fuelExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
 
-        let usageQuery = query(collection(db, 'vehicle-usage'));
-        const usageSnap = await getDocs(usageQuery);
-        let usageData = usageSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          startTime: doc.data().startTime?.toDate ? doc.data().startTime.toDate() : new Date(doc.data().startTime)
-        }));
-
+        let totalDistance = 0;
+        let totalTrips = 0;
         if (selectedVehicle !== 'all') {
-          usageData = usageData.filter(usage => usage.vehicleId === selectedVehicle);
+          // Use vehicles[].currentMileage as starting mileage, and max mileage from fuel records for selected vehicle
+          const vehicleObj = vehicles.find(v => v.id === selectedVehicle);
+          const startMileage = vehicleObj?.currentMileage !== undefined && vehicleObj?.currentMileage !== null ? Number(vehicleObj.currentMileage) : null;
+          const vehicleFuelRecords = fuelExpenses.filter(r => r.vehicleId === selectedVehicle && r.mileage !== undefined && r.mileage !== null);
+          if (vehicleFuelRecords.length > 0 && startMileage !== null) {
+            const maxMileage = Math.max(...vehicleFuelRecords.map(r => Number(r.mileage)));
+            totalDistance = maxMileage - startMileage;
+          } else {
+            totalDistance = 0;
+          }
+          totalTrips = vehicleFuelRecords.length;
+        } else {
+          // For all vehicles, sum up distances for each vehicle using vehicles[].currentMileage as start and max mileage from fuel records as end
+          totalDistance = vehicles.reduce((sum, v) => {
+            const vStartMileage = v.currentMileage !== undefined && v.currentMileage !== null ? Number(v.currentMileage) : null;
+            const vFuelRecords = fuelExpenses.filter(r => r.vehicleId === v.id && r.mileage !== undefined && r.mileage !== null);
+            if (vFuelRecords.length > 0 && vStartMileage !== null) {
+              const maxMileage = Math.max(...vFuelRecords.map(r => Number(r.mileage)));
+              return sum + (maxMileage - vStartMileage);
+            }
+            return sum;
+          }, 0);
+          totalTrips = fuelRecords.length;
         }
-
-        usageData = usageData.filter(usage => {
-          const usageDate = usage.startTime;
-          return usageDate >= startDateTime && usageDate <= endDateTime;
-        });
-
-        const totalDistance = usageData.reduce((sum, usage) => sum + (usage.totalDistance || 0), 0);
         const costPerKm = totalDistance > 0 ? totalExpenses / totalDistance : 0;
 
         setAnalysisData({
-          totalTrips: usageData.length,
+          totalTrips,
           totalDistance,
           totalExpenses,
           totalFuelExpenses,
@@ -165,8 +279,7 @@ export default function VehiclesAnalysisPage() {
    return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">วิเคราะห์การใช้รถ</h1>
-      
-      {/* Filters Card */}
+
       <div className="bg-white rounded-xl shadow p-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
@@ -225,24 +338,73 @@ export default function VehiclesAnalysisPage() {
             </div>
             <div className="bg-white rounded-xl shadow p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-600 text-sm">ค่าใช้จ่ายรวม</span>
-              </div>
-              <div className="text-2xl font-bold text-red-600">{analysisData.totalExpenses.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div className="text-xs text-gray-500 mt-1">บาท</div>
-            </div>
-            <div className="bg-white rounded-xl shadow p-4">
-              <div className="flex items-center justify-between mb-2">
                 <span className="text-gray-600 text-sm">ต้นทุนต่อ กม.</span>
               </div>
               <div className="text-2xl font-bold text-orange-600">{analysisData.costPerKm.toFixed(2)}</div>
               <div className="text-xs text-gray-500 mt-1">บาท/กม.</div>
             </div>
           </div>
+
+          {/* รายชื่อรถที่มีอัตราสิ้นเปลืองต่ำกว่า threshold */}
+          <div className="bg-white rounded-xl shadow p-6 mt-8">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-2">
+              <h2 className="text-xl font-semibold">รถที่มีอัตราสิ้นเปลืองเฉลี่ยต่ำกว่าเกณฑ์</h2>
+              <div className="flex items-center gap-2">
+                <label htmlFor="threshold" className="text-sm text-gray-700">กำหนดเกณฑ์ (กม./ลิตร):</label>
+                <input
+                  id="threshold"
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={threshold}
+                  onChange={e => setThreshold(Number(e.target.value))}
+                  className="w-20 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-500 text-center"
+                />
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              {(() => {
+                // Filter vehicles below threshold
+                const filteredVehicles = vehicles.filter(vehicle => {
+                  const vFuelRecords = analysisData.fuelRecords.filter(r => r.vehicleId === vehicle.id && r.fuelEfficiency !== null);
+                  const avgEff = vFuelRecords.length > 0 ? (vFuelRecords.reduce((sum, r) => sum + r.fuelEfficiency, 0) / vFuelRecords.length) : 0;
+                  return avgEff > 0 && avgEff < threshold;
+                });
+                if (filteredVehicles.length === 0) {
+                  return <div className="text-center text-gray-500 py-8">ไม่มีรถที่มีอัตราสิ้นเปลืองต่ำกว่า {threshold} กม./ลิตร</div>;
+                }
+                return (
+                  <table className="min-w-[400px] w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="px-4 py-2 text-left">ทะเบียนรถ</th>
+                        <th className="px-4 py-2 text-left">ยี่ห้อ/รุ่น</th>
+                        <th className="px-4 py-2 text-left">อัตราสิ้นเปลืองเฉลี่ย (กม./ลิตร)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredVehicles.map(vehicle => {
+                        const vFuelRecords = analysisData.fuelRecords.filter(r => r.vehicleId === vehicle.id && r.fuelEfficiency !== null);
+                        const avgEff = vFuelRecords.length > 0 ? (vFuelRecords.reduce((sum, r) => sum + r.fuelEfficiency, 0) / vFuelRecords.length) : 0;
+                        return (
+                          <tr key={vehicle.id} className="border-b hover:bg-orange-50">
+                            <td className="px-4 py-2 font-bold text-red-600">{vehicle.licensePlate}</td>
+                            <td className="px-4 py-2">{vehicle.brand} {vehicle.model}</td>
+                            <td className="px-4 py-2 font-bold">{avgEff > 0 ? avgEff.toFixed(2) : '-'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+          </div>
           
           {/* Fuel Analysis Cards */}
           <div className="bg-white rounded-xl shadow p-6">
             <h2 className="text-xl font-semibold mb-4">การวิเคราะห์น้ำมัน</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="text-center p-4 bg-blue-50 rounded-lg">
                 <div className="text-sm text-gray-600 mb-2">จำนวนครั้งที่เติมน้ำมัน</div>
                 <div className="text-3xl font-bold text-blue-600">{analysisData.fuelRecords.length}</div>
@@ -257,6 +419,13 @@ export default function VehiclesAnalysisPage() {
                 <div className="text-sm text-gray-600 mb-2">ค่าน้ำมันรวม</div>
                 <div className="text-3xl font-bold text-purple-600">{analysisData.totalFuelExpenses.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 <div className="text-xs text-gray-500 mt-1">บาท</div>
+              </div>
+              <div className="text-center p-4 bg-orange-50 rounded-lg">
+                <div className="text-sm text-gray-600 mb-2">เลขไมล์ล่าสุดที่เติมน้ำมัน</div>
+                <div className="text-3xl font-bold text-orange-600">
+                  {analysisData.fuelRecords.length > 0 ? analysisData.fuelRecords[0].mileage?.toLocaleString() : '-'}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">กม.</div>
               </div>
             </div>
           </div>

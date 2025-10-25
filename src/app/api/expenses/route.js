@@ -26,9 +26,9 @@ export async function POST(request) {
     }
 
     // Validate type
-    if (!['fuel', 'other'].includes(type)) {
+    if (!['fuel', 'fluid', 'other'].includes(type)) {
       return NextResponse.json(
-        { error: 'ประเภทค่าใช้จ่ายไม่ถูกต้อง (fuel หรือ other)' },
+        { error: 'ประเภทค่าใช้จ่ายไม่ถูกต้อง (fuel, fluid หรือ other)' },
         { status: 400 }
       );
     }

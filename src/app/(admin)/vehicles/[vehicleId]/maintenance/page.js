@@ -56,23 +56,23 @@ function MaintenanceRecord({ record }) {
 
     // แสดง badge แหล่งที่มา
     const sourceBadge = record.source === 'expenses' ? (
-        <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded ml-2">จากทริป</span>
+        <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">จากทริป</span>
     ) : null;
 
     return (
-        <div className="bg-white p-4 rounded-lg shadow grid grid-cols-7 gap-4 items-center">
-            <div>
-                <p className="text-gray-700">{displayDate}</p>
-                {sourceBadge}
-            </div>
-            <p className="text-gray-700">{typeLabel}</p>
-            <p className="text-gray-700">{record.vendor ?? '-'}</p>
-            <p className="text-gray-700 col-span-2">{record.details}</p>
-            <p className="font-semibold text-right">{formatCurrency(displayCost)}</p>
-            <div className="flex justify-end">
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusBadge(status)}`}>{statusLabel(status)}</span>
-            </div>
-        </div>
+        <tr className="hover:bg-gray-50">
+            <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{displayDate}</td>
+            <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{typeLabel}</td>
+            <td className="px-4 py-3 text-sm text-gray-900">{record.vendor ?? '-'}</td>
+            <td className="px-4 py-3 text-sm text-gray-900">{record.details}</td>
+            <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{formatCurrency(displayCost)}</td>
+            <td className="px-4 py-3 text-sm text-gray-900">
+                <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadge(status)}`}>{statusLabel(status)}</span>
+                    {sourceBadge}
+                </div>
+            </td>
+        </tr>
     );
 }
 
@@ -219,6 +219,9 @@ export default function MaintenancePage() {
         }
     }, [currentRecord, receiveData, vehicleId]);
 
+    // คำนวณราคารวมทั้งหมด
+    const totalCost = allRecords.reduce((sum, rec) => sum + (rec.finalCost ?? rec.cost ?? 0), 0);
+
     if (loading) {
         return <p>Loading maintenance history...</p>;
     }
@@ -233,33 +236,45 @@ export default function MaintenancePage() {
                         )}
                         <div>
                             <h1 className="text-3xl font-bold">ประวัติการซ่อมบำรุง</h1>
-                                        <p className="text-xl text-gray-600">{vehicle.brand} {vehicle.model} ({vehicle.licensePlate})</p>
-                                        <div className="mt-2 text-sm text-gray-500 flex gap-4">
-                                            <div>วันที่ปัจจุบัน: <span className="font-medium">{new Date().toLocaleDateString('th-TH')}</span></div>
-                                            <div>ไมล์ล่าสุด: <span className="font-medium">{(vehicle.currentMileage ?? (records && records[0]?.mileage) ?? '-').toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')} กม.</span></div>
-                                        </div>
+                            <p className="text-xl text-gray-600">{vehicle.brand} {vehicle.model} ({vehicle.licensePlate})</p>
                         </div>
                     </div>
-                    <button onClick={() => setShowForm(true)} className="px-4 py-2 font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                    <button onClick={() => setShowForm(true)} className="px-4 py-2 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700">
                         + เพิ่มรายการซ่อม
                     </button>
                 </div>
             )}
 
             <div className="space-y-4">
-                <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-7 gap-4 font-semibold text-gray-600">
-                    <p>วันที่/เวลา</p>
-                    <p>หมวดค่าใช้จ่าย</p>
-                    <p>ชื่ออู่/ผู้ให้บริการ</p>
-                    <p className="col-span-2">รายละเอียด</p>
-                    <p className="text-right">จำนวนเงิน (บาท)</p>
-                    <p className="text-right">สถานะรายการ</p>
-                </div>
-                {allRecords.length > 0 ? (
-                    allRecords.map(record => <MaintenanceRecord key={record.id} record={record} vehicleId={vehicleId} openReceiveModal={openReceiveModal} />)
-                ) : (
-                    <p className="text-center py-8 text-gray-500">ยังไม่มีประวัติการซ่อมบำรุง</p>
+                {allRecords.length > 0 && (
+                    <div className="bg-gray-100 p-4 rounded-lg grid grid-cols-2 gap-4 font-bold text-gray-800">
+                        <p>ราคารวมทั้งหมด</p>
+                        <p className="text-right">{new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(totalCost)}</p>
+                    </div>
                 )}
+                <div className="bg-white rounded-lg shadow overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">วันที่/เวลา</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">หมวดค่าใช้จ่าย</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ชื่ออู่/ผู้ให้บริการ</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">รายละเอียด</th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">จำนวนเงิน</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">สถานะ</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {allRecords.length > 0 ? (
+                                allRecords.map(record => <MaintenanceRecord key={record.id} record={record} />)
+                            ) : (
+                                <tr>
+                                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">ยังไม่มีประวัติการซ่อมบำรุง</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             {showForm && <AddMaintenanceForm vehicleId={vehicleId} onClose={() => setShowForm(false)} onlyCost={true} />}

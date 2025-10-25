@@ -22,20 +22,55 @@ function FuelRecord({ record }) {
     const formatCurrency = (number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(number);
     const efficiency = record.previousMileage && record.liters ? ((record.mileage - record.previousMileage) / record.liters).toFixed(2) : 'N/A';
     const pricePerLiter = record.liters > 0 ? (record.cost / record.liters) : 0;
-    
+
     // แสดง badge แหล่งที่มา
     const sourceBadge = record.source === 'expenses' ? (
         <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">จากทริป</span>
     ) : null;
 
+    // ดึงชื่อผู้เติมน้ำมัน (เฉพาะกรณี expenses)
+    const [userName, setUserName] = useState('-');
+    useEffect(() => {
+        async function fetchUser() {
+            const uid = (record.userId || '').toString().trim();
+            if (uid) {
+                try {
+                    const { doc, getDoc, collection, query, where, getDocs } = await import('firebase/firestore');
+                    // ลองค้นด้วย doc id ก่อน
+                    const userRef = doc(db, 'users', uid);
+                    const snap = await getDoc(userRef);
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        setUserName(data.displayName || data.name || data.fullName || '-');
+                        return;
+                    }
+                    // ถ้าไม่เจอ ให้ค้น users ที่ lineId ตรงกับ userId
+                    const q = query(collection(db, 'users'), where('lineId', '==', uid));
+                    const qSnap = await getDocs(q);
+                    if (!qSnap.empty) {
+                        const data = qSnap.docs[0].data();
+                        setUserName(data.displayName || data.name || data.fullName || '-');
+                        return;
+                    }
+                    setUserName('-');
+                } catch (err) {
+                    setUserName('-');
+                }
+            } else {
+                setUserName('-');
+            }
+        }
+        fetchUser();
+    }, [record.userId]);
+
     return (
-        <div className="bg-white p-4 rounded-lg shadow grid grid-cols-2 gap-4 items-center">
-            <div>
-                <p className="text-gray-700">{formatDateTime(record.date)}</p>
-                {sourceBadge}
-            </div>
-            <p className="font-semibold text-right">{formatCurrency(record.cost)}</p>
-        </div>
+        <tr className="hover:bg-gray-50">
+            <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{formatDateTime(record.date)}</td>
+            <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{userName}</td>
+            <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.mileage ? record.mileage.toLocaleString() + ' กม.' : '-'}</td>
+            <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{formatCurrency(record.cost)}</td>
+            <td className="px-4 py-3 text-sm text-gray-900">{sourceBadge}</td>
+        </tr>
     );
 }
 
@@ -46,6 +81,7 @@ export default function FuelPage() {
     const [fuelExpenses, setFuelExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
+    const [lastMileage, setLastMileage] = useState(null);
 
     useEffect(() => {
         if (!vehicleId) return;
@@ -65,38 +101,17 @@ export default function FuelPage() {
             setFuelLogs(logsData);
         });
 
-        // ดึง expenses ที่ type='fuel' ผ่าน bookings
+        // ดึง expenses ที่ type='fuel' และ vehicleId ตรง
         const fetchFuelExpenses = async () => {
             try {
-                // ดึง bookings ของรถคันนี้
-                const bookingsSnap = await (await import('firebase/firestore')).getDocs(
-                    query(collection(db, 'bookings'), where('vehicleId', '==', vehicleId))
-                );
-                const bookingsMap = {};
-                bookingsSnap.docs.forEach(d => {
-                    bookingsMap[d.id] = d.data();
-                });
-                const bookingIds = Object.keys(bookingsMap);
-
-                if (bookingIds.length === 0) {
-                    setFuelExpenses([]);
-                    setLoading(false);
-                    return;
-                }
-
-                // ดึง expenses ที่เป็น type='fuel' และ bookingId อยู่ใน bookingIds
                 const expensesSnap = await (await import('firebase/firestore')).getDocs(
-                    collection(db, 'expenses')
+                    query(collection(db, 'expenses'), where('vehicleId', '==', vehicleId), where('type', '==', 'fuel'))
                 );
-                const fuelExps = expensesSnap.docs
-                    .map(d => ({ 
-                        id: d.id, 
-                        ...d.data(), 
-                        source: 'expenses',
-                        bookingData: bookingsMap[d.data().bookingId] // เก็บข้อมูล booking ไว้ด้วย
-                    }))
-                    .filter(exp => exp.type === 'fuel' && bookingIds.includes(exp.bookingId));
-
+                const fuelExps = expensesSnap.docs.map(d => ({
+                    id: d.id,
+                    ...d.data(),
+                    source: 'expenses'
+                }));
                 setFuelExpenses(fuelExps);
             } catch (e) {
                 console.error('Error fetching fuel expenses:', e);
@@ -113,18 +128,16 @@ export default function FuelPage() {
     const allFuelRecords = [
         ...fuelLogs,
         ...fuelExpenses.map(exp => {
-            // ใช้ startDateTime จาก booking เป็นวันที่บันทึก
             let date = exp.bookingData?.startDateTime;
-            // ถ้าไม่มี startDateTime ให้ใช้ createdAt หรือ date
             if (!date) date = exp.createdAt || exp.date;
-            // ถ้า date เป็น string ให้แปลงเป็น Date object
             if (date && typeof date === 'string') date = new Date(date);
             return {
                 id: exp.id,
                 date,
                 cost: exp.amount || 0,
                 source: 'expenses',
-                note: exp.note || ''
+                note: exp.note || '',
+                mileage: exp.mileage || null
             };
         })
     ].sort((a, b) => {
@@ -132,6 +145,22 @@ export default function FuelPage() {
         const bt = b.date?.seconds ? b.date.seconds * 1000 : (b.date ? new Date(b.date).getTime() : 0);
         return bt - at;
     });
+
+    // หาเลขไมล์ล่าสุดที่เติมน้ำมัน
+    useEffect(() => {
+        if (allFuelRecords.length > 0) {
+            // หา record ที่มี mileage มากที่สุด
+            const withMileage = allFuelRecords.filter(r => r.mileage);
+            if (withMileage.length > 0) {
+                const maxMileage = Math.max(...withMileage.map(r => r.mileage));
+                setLastMileage(maxMileage);
+            } else {
+                setLastMileage(null);
+            }
+        } else {
+            setLastMileage(null);
+        }
+    }, [allFuelRecords]);
 
     // คำนวณราคารวมทั้งหมด
     const totalCost = allFuelRecords.reduce((sum, rec) => sum + (rec.cost || 0), 0);
@@ -149,6 +178,9 @@ export default function FuelPage() {
                         <div>
                             <h1 className="text-3xl font-bold">ประวัติการเติมน้ำมัน</h1>
                             <p className="text-xl text-gray-600">{vehicle.brand} {vehicle.model} ({vehicle.licensePlate})</p>
+                            {lastMileage && (
+                                <p className="text-md text-blue-700 font-semibold mt-2">เลขไมล์ล่าสุดที่เติมน้ำมัน: {lastMileage.toLocaleString()} กม.</p>
+                            )}
                         </div>
                     </div>
                     <button onClick={() => setShowForm(true)} className="px-4 py-2 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700">
@@ -163,19 +195,38 @@ export default function FuelPage() {
                         <p className="text-right">{new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(totalCost)}</p>
                     </div>
                 )}
-                <div className="bg-gray-50 p-4 rounded-lg grid grid-cols-2 gap-4 font-semibold text-gray-600">
-                    <p>วันที่/เวลา</p>
-                    <p className="text-right">ราคา</p>
+                <div className="bg-white rounded-lg shadow overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                            <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">วันที่/เวลา</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ผู้เติม</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">เลขไมล์ที่เติม</th>
+                                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">ราคา</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">แหล่งที่มา</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {allFuelRecords.length > 0 ? (
+                                allFuelRecords.map(log => <FuelRecord key={log.id} record={log} />)
+                            ) : (
+                                <tr>
+                                    <td colSpan={4} className="px-4 py-8 text-center text-gray-500">ยังไม่มีประวัติการเติมน้ำมัน</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
-                {allFuelRecords.length > 0 ? (
-                    <>
-                        {allFuelRecords.map(log => <FuelRecord key={log.id} record={log} />)}
-                    </>
-                ) : (
-                    <p className="text-center py-8 text-gray-500">ยังไม่มีประวัติการเติมน้ำมัน</p>
-                )}
             </div>
-            {showForm && <AddFuelLogForm vehicleId={vehicleId} onClose={() => setShowForm(false)} />}
+            {showForm && <AddFuelLogForm vehicleId={vehicleId} onClose={() => {
+                setShowForm(false);
+                // reload fuel logs & expenses after add
+                setLoading(true);
+                // refetch fuel logs and expenses
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
+            }} />}
         </div>
     );
 }

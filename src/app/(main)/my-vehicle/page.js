@@ -160,6 +160,7 @@ export default function MyVehiclePage() {
     const getExpenseTypeText = (type) => {
         switch (type) {
             case 'fuel': return '⛽ เติมน้ำมัน';
+            case 'fluid': return '🛢️ เปลี่ยนของเหลว';
             case 'other': return '💰 ค่าใช้จ่ายอื่นๆ';
             default: return type;
         }

@@ -10,31 +10,45 @@ function VehicleList({ vehicles }) {
   const getStatusClass = (status) => {
     switch (status) {
       case "available":
-        return "bg-green-100 text-green-800";
+        return "bg-green-100 text-green-800 border-green-300";
+      case "pending":
+        return "bg-blue-100 text-blue-800 border-blue-300";
       case "in_use":
+      case "in-use":
+        return "bg-yellow-100 text-yellow-800 border-yellow-300";
       case "on_trip":
-        return "bg-yellow-100 text-yellow-800";
+      case "on-trip":
+        return "bg-orange-100 text-orange-800 border-orange-300";
       case "maintenance":
-        return "bg-red-100 text-red-800";
+        return "bg-red-100 text-red-800 border-red-300";
+      case "retired":
+        return "bg-gray-300 text-gray-700 border-gray-400";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800 border-gray-300";
     }
   };
 
   const getStatusLabel = (status) => {
+    if (status === null || status === undefined || status === "") {
+      return "ไม่ระบุสถานะ";
+    }
     switch (status) {
       case "available":
         return "พร้อมใช้งาน";
-       case "pending":
+      case "pending":
         return "อยู่ระหว่างรออนุมัติ";
       case "in_use":
-        return "กำลังถูกใช้งาน";
+      case "in-use":
+        return "กำลังใช้งาน";
       case "on_trip":
+      case "on-trip":
         return "อยู่ระหว่างเดินทาง";
       case "maintenance":
         return "ซ่อมบำรุง";
+      case "retired":
+        return "ปลดระวาง";
       default:
-        return "ไม่ทราบสถานะ";
+        return `สถานะ: ${status}`;
     }
   };
 
@@ -44,6 +58,10 @@ function VehicleList({ vehicles }) {
     );
   }
 
+  // DEBUG: log vehicle id and latestFuel
+  vehicles.forEach(v => {
+    console.log(`[DEBUG] VehicleList id=${v.id} latestFuel=`, v.latestFuel);
+  });
   return (
     <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
       {vehicles.map((vehicle) => (
@@ -51,7 +69,7 @@ function VehicleList({ vehicles }) {
           <div className="flex gap-6 items-center mb-4 relative">
             {/* Status badge overlay on image */}
             <div className="absolute left-0 top-0 z-10">
-              <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusClass(vehicle.status)}`}>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusClass(vehicle.status)}`}>
                 {getStatusLabel(vehicle.status)}
               </span>
             </div>
@@ -66,7 +84,39 @@ function VehicleList({ vehicles }) {
                 <div>ทะเบียน: <span className="font-semibold">{vehicle.licensePlate}</span></div>
                 <div>สี: <span className="font-semibold">{vehicle.color || '-'}</span></div>
                 <div>ประเภท: <span className="font-semibold">{vehicle.type}</span></div>
-                <div>ไมล์: <span className="font-semibold">{vehicle.currentMileage ?? '-'}</span></div>
+                {/* Latest fuel expense (always show) */}
+                <div className="col-span-2 text-xs text-blue-700">
+                  <span className="font-semibold">เติมน้ำมันล่าสุด:</span>
+                  {vehicle.latestFuel ? (
+                    <>
+                      {vehicle.latestFuel.mileage ? <span className="ml-1">{vehicle.latestFuel.mileage.toLocaleString()} กม.</span> : <span className="ml-1">-</span>}
+                      {vehicle.latestFuel.amount ? <span className="ml-2">{Number(vehicle.latestFuel.amount).toLocaleString()} ฿</span> : null}
+                      {vehicle.latestFuel.note ? <span className="ml-2 text-gray-500">({vehicle.latestFuel.note})</span> : null}
+                    </>
+                  ) : <span className="ml-1">-</span>}
+                </div>
+                {/* Latest fluid change (always show) */}
+                <div className="col-span-2 text-xs text-yellow-700">
+                  <span className="font-semibold">เปลี่ยนของเหลวล่าสุด:</span>
+                  {vehicle.latestFluid ? (
+                    <>
+                      {vehicle.latestFluid.mileage ? <span className="ml-1">{vehicle.latestFluid.mileage.toLocaleString()} กม.</span> : <span className="ml-1">-</span>}
+                      {vehicle.latestFluid.amount ? <span className="ml-2">{Number(vehicle.latestFluid.amount).toLocaleString()} ฿</span> : null}
+                      {vehicle.latestFluid.note ? <span className="ml-2 text-gray-500">({vehicle.latestFluid.note})</span> : null}
+                    </>
+                  ) : <span className="ml-1">-</span>}
+                </div>
+                {/* Latest maintenance (always show) */}
+                <div className="col-span-2 text-xs text-red-700">
+                  <span className="font-semibold">ซ่อมล่าสุด:</span>
+                  {vehicle.latestMaintenance ? (
+                    <>
+                      {vehicle.latestMaintenance.mileage ? <span className="ml-1">{vehicle.latestMaintenance.mileage.toLocaleString()} กม.</span> : <span className="ml-1">-</span>}
+                      {vehicle.latestMaintenance.amount ? <span className="ml-2">{Number(vehicle.latestMaintenance.amount).toLocaleString()} ฿</span> : null}
+                      {vehicle.latestMaintenance.note ? <span className="ml-2 text-gray-500">({vehicle.latestMaintenance.note})</span> : null}
+                    </>
+                  ) : <span className="ml-1">-</span>}
+                </div>
                 {(() => {
                   let show = false;
                   let display = '';
@@ -115,27 +165,33 @@ function VehicleList({ vehicles }) {
             <div className="flex gap-2">
               <Link
                 href={`/vehicles/${vehicle.id}/edit`}
-                className="px-3 py-1 text-xs bg-teal-100 text-teal-700 rounded hover:bg-teal-200"
+                className="px-3 py-3 rounded-md text-xs bg-teal-100 text-teal-700 hover:bg-teal-200"
               >
                 แก้ไข
               </Link>
               <Link
                 href={`/vehicles/${vehicle.id}/maintenance`}
-                className="px-3 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200"
+                className="px-3 py-3 rounded-md text-xs bg-indigo-100 text-indigo hover:bg-indigo-200"
               >
                 ค่าใช้จ่าย
               </Link>
               <Link
                 href={`/vehicles/${vehicle.id}/garage`}
-                className="px-3 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
+                className="px-3 py-3 rounded-md text-xs bg-purple-100 text-purple hover:bg-purple-200"
               >
                 ส่งซ่อม
               </Link>
               <Link
                 href={`/vehicles/${vehicle.id}/fuel`}
-                className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                className="px-3 py-3 rounded-md text-xs bg-green-100 text-green-7 hover:bg-green-200"
               >
                 น้ำมัน
+              </Link>
+              <Link
+                href={`/vehicles/${vehicle.id}/fluid`}
+                className="px-3 py-3 rounded-md text-xs bg-yellow-100 text-yellow hover:bg-green-200"
+              >
+                ของเหลว
               </Link>
             </div>
           </div>
@@ -158,9 +214,9 @@ export default function VehiclesPage() {
         vehiclesData.push({ id: doc.id, ...doc.data() });
       });
 
-      // enrich vehicles with driver name (if driverId present)
-      // fallback: if vehicle has no driver, look for the most-recent booking that assigned a driver
+      // enrich vehicles with driver name and latest fuel/fluid/maintenance log
       const enriched = await Promise.all(vehiclesData.map(async v => {
+        // Driver info (existing logic)
         if (v.driverId) {
           try {
             const { doc, getDoc } = await import('firebase/firestore');
@@ -168,13 +224,9 @@ export default function VehiclesPage() {
             const snap = await getDoc(userRef);
             if (snap.exists()) v.driver = { id: snap.id, ...snap.data() };
           } catch (e) {
-            // ignore driver lookup failures
             console.error('driver lookup failed', e);
           }
         }
-
-        // If there's no driver info on the vehicle, try to find the latest booking
-        // that assigned a driver and use that as the "latest driver" display.
         if (!v.driver && !v.driverName) {
           try {
             const fr = await import('firebase/firestore');
@@ -190,7 +242,6 @@ export default function VehiclesPage() {
             const bSnap = await getDocs(bq);
             if (!bSnap.empty) {
               const bd = bSnap.docs[0].data();
-              // Prefer to resolve driverId -> user doc for accurate name
               if (bd.driverId) {
                 try {
                   const { doc: docFn, getDoc: getDocFn } = await import('firebase/firestore');
@@ -211,6 +262,54 @@ export default function VehiclesPage() {
           } catch (e) {
             console.error('latest booking lookup failed', e);
           }
+        }
+
+        // Latest fuel/fluid/maintenance expense
+        try {
+          const fr = await import('firebase/firestore');
+          const { collection: col, query: qfn, where, orderBy, limit, getDocs } = fr;
+          const expensesRef = col(db, 'expenses');
+          // Fuel
+          const fuelQ = qfn(
+            expensesRef,
+            where('vehicleId', '==', v.id),
+            where('type', '==', 'fuel'),
+            orderBy('timestamp', 'desc'),
+            limit(1)
+          );
+          const fuelSnap = await getDocs(fuelQ);
+          console.log(`[DEBUG] vehicleId=${v.id} fuel count:`, fuelSnap.size);
+          if (!fuelSnap.empty) {
+            v.latestFuel = fuelSnap.docs[0].data();
+          }
+          // Fluid
+          const fluidQ = qfn(
+            expensesRef,
+            where('vehicleId', '==', v.id),
+            where('type', '==', 'fluid'),
+            orderBy('timestamp', 'desc'),
+            limit(1)
+          );
+          const fluidSnap = await getDocs(fluidQ);
+          console.log(`[DEBUG] vehicleId=${v.id} fluid count:`, fluidSnap.size);
+          if (!fluidSnap.empty) {
+            v.latestFluid = fluidSnap.docs[0].data();
+          }
+          // Maintenance
+          const maintenanceQ = qfn(
+            expensesRef,
+            where('vehicleId', '==', v.id),
+            where('type', '==', 'maintenance'),
+            orderBy('timestamp', 'desc'),
+            limit(1)
+          );
+          const maintenanceSnap = await getDocs(maintenanceQ);
+          console.log(`[DEBUG] vehicleId=${v.id} maintenance count:`, maintenanceSnap.size);
+          if (!maintenanceSnap.empty) {
+            v.latestMaintenance = maintenanceSnap.docs[0].data();
+          }
+        } catch (e) {
+          // ignore lookup failures
         }
 
         return v;

@@ -204,8 +204,9 @@ export default function EditVehiclePage() {
                 <input name="color" value={form.color} onChange={handleChange} className="w-full p-3 border rounded-md" />
               </div>
               <div>
-                <label className="block mb-1 text-sm font-medium">เลขไมล์ปัจจุบัน</label>
-                <input name="currentMileage" type="number" value={form.currentMileage} onChange={handleChange} className="w-full p-3 border rounded-md" required />
+                <label className="block mb-1 text-sm font-medium">เลขไมล์เริ่มต้น</label>
+                <input name="currentMileage" type="number" value={form.currentMileage} readOnly className="w-full p-3 border rounded-md bg-gray-100" />
+                <p className="text-xs text-gray-500 mt-1">* ไม่สามารถแก้ไขเลขไมล์เริ่มต้นได้</p>
               </div>
             </div>
 

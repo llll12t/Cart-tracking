@@ -1,10 +1,59 @@
 "use client";
+import React from "react";
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 
 export default function ExpenseLogPage() {
+  // Modal สำหรับแสดงกล้อง
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraStream, setCameraStream] = useState(null);
+  const videoRef = React.useRef(null);
+  const canvasRef = React.useRef(null);
+  // ฟังก์ชันเปิดกล้อง
+  const openCamera = async () => {
+    setShowCamera(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      setCameraStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      alert('ไม่สามารถเปิดกล้องได้');
+      setShowCamera(false);
+    }
+  };
+  // ฟังก์ชันถ่ายภาพและ OCR
+  const handleCapture = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.drawImage(videoRef.current, 0, 0, 320, 240);
+    const imageData = canvasRef.current.toDataURL('image/png');
+    setShowCamera(false);
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    // OCR ด้วย Tesseract.js
+    const { createWorker } = await import('tesseract.js');
+    const worker = await createWorker('tha', 1);
+    await worker.load();
+    await worker.loadLanguage('eng');
+    await worker.initialize('eng');
+    const { data: { text } } = await worker.recognize(imageData);
+    await worker.terminate();
+    const match = text.match(/\d{4,7}/);
+    if (match) {
+      setMileage(match[0]);
+      alert('เลขไมล์ที่อ่านได้: ' + match[0]);
+    } else {
+      alert('ไม่พบเลขไมล์ในภาพ กรุณากรอกเอง');
+    }
+  };
+  // State สำหรับรายการเติมน้ำมันล่าสุด
+  const [latestFuelExpense, setLatestFuelExpense] = useState(null);
   const { user, userProfile } = useAuth();
   const router = useRouter();
   const [activeUsage, setActiveUsage] = useState(null);
@@ -16,6 +65,8 @@ export default function ExpenseLogPage() {
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastFuelMileage, setLastFuelMileage] = useState(null);
+  const [otherTitle, setOtherTitle] = useState(""); // State สำหรับชื่อรายการค่าใช้จ่ายอื่นๆ
+  const [fluidLatest, setFluidLatest] = useState(null); // State สำหรับรายการเปลี่ยนของเหลวล่าสุด
 
   // Fetch active vehicle usage
   useEffect(() => {
@@ -29,29 +80,39 @@ export default function ExpenseLogPage() {
 
         if (result.success && result.usage) {
           setActiveUsage(result.usage);
-          
-          // Fetch expenses to get last fuel mileage
-          const expensesResponse = await fetch(`/api/expenses?usageId=${result.usage.id}`);
+
+          // Fetch expenses ด้วย vehicleId เพื่อให้ได้ประวัติการเติมน้ำมันของรถคันนี้ทั้งหมด
+          const expensesResponse = await fetch(`/api/expenses?vehicleId=${result.usage.vehicleId}`);
           const expensesResult = await expensesResponse.json();
-          
+
           if (expensesResult.success && expensesResult.expenses) {
             // หาเลขไมล์จากการเติมน้ำมันครั้งล่าสุด
             const fuelExpenses = expensesResult.expenses
               .filter(exp => exp.type === 'fuel' && exp.mileage)
               .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            
+
             if (fuelExpenses.length > 0) {
               const lastMileage = fuelExpenses[0].mileage;
               setLastFuelMileage(lastMileage);
-              setMileage(lastMileage.toString());
+              setLatestFuelExpense(fuelExpenses[0]);
             } else if (result.usage.startMileage) {
               // ถ้ายังไม่เคยเติมเลย ใช้เลขไมล์เริ่มต้น
               setLastFuelMileage(result.usage.startMileage);
-              setMileage(result.usage.startMileage.toString());
+              setLatestFuelExpense(null);
+            }
+            // หาเปลี่ยนของเหลวล่าสุด
+            const fluidExpenses = expensesResult.expenses
+              .filter(exp => exp.type === 'fluid' && exp.mileage)
+              .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            if (fluidExpenses.length > 0) {
+              setFluidLatest(fluidExpenses[0]);
+            } else {
+              setFluidLatest(null);
             }
           } else if (result.usage.startMileage) {
             setLastFuelMileage(result.usage.startMileage);
             setMileage(result.usage.startMileage.toString());
+            setLatestFuelExpense(null);
           }
         } else {
           // No active usage - redirect back
@@ -76,9 +137,14 @@ export default function ExpenseLogPage() {
       return;
     }
 
-    // ถ้าเป็นน้ำมัน บังคับให้กรอกเลขไมล์
-    if (type === "fuel" && (!mileage || Number(mileage) <= 0)) {
-      setMessage("กรุณาระบุเลขไมล์ปัจจุบันเมื่อเติมน้ำมัน");
+    if (type === "other" && !otherTitle.trim()) {
+      setMessage("กรุณาระบุชื่อรายการค่าใช้จ่าย");
+      return;
+    }
+
+    // ถ้าเป็นน้ำมันหรือเปลี่ยนถ่ายของเหลว บังคับให้กรอกเลขไมล์
+    if ((type === "fuel" || type === "fluid") && (!mileage || Number(mileage) <= 0)) {
+      setMessage("กรุณาระบุเลขไมล์ปัจจุบัน");
       return;
     }
 
@@ -92,6 +158,10 @@ export default function ExpenseLogPage() {
 
     try {
       const userId = userProfile?.lineId || user?.uid;
+      const userName = userProfile?.displayName || userProfile?.name || user?.displayName || user?.name || "-";
+      // กำหนด type ที่จะส่งไป backend
+      let submitType = type;
+      if (type === "fluid") submitType = "fluid";
       const response = await fetch('/api/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -99,10 +169,12 @@ export default function ExpenseLogPage() {
           usageId: activeUsage.id,
           vehicleId: activeUsage.vehicleId,
           userId: userId,
-          type,
+          userName: userName,
+          type: submitType,
           amount: Number(amount),
           mileage: mileage ? Number(mileage) : null,
           note: note || '',
+          title: type === "other" ? otherTitle : undefined,
         }),
       });
 
@@ -115,7 +187,6 @@ export default function ExpenseLogPage() {
       }
 
       setMessage("บันทึกค่าใช้จ่ายสำเร็จ!");
-      
       // Reset form
       setAmount("");
       setNote("");
@@ -125,7 +196,7 @@ export default function ExpenseLogPage() {
       setTimeout(() => {
         router.push('/my-vehicle');
       }, 1500);
-      
+
     } catch (error) {
       console.error("Error submitting expense:", error);
       setMessage("เกิดข้อผิดพลาดในการบันทึกค่าใช้จ่าย");
@@ -163,7 +234,6 @@ export default function ExpenseLogPage() {
       <div className="px-4 -mt-16">
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            
             {/* Vehicle Info */}
             {activeUsage && (
               <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 mb-4">
@@ -177,6 +247,13 @@ export default function ExpenseLogPage() {
                     เลขไมล์จากการเติมล่าสุด: {lastFuelMileage.toLocaleString()} กม.
                   </p>
                 )}
+                {/* แสดงรายการเปลี่ยนของเหลวล่าสุด */}
+                {fluidLatest && (
+                  <div className="mt-2 text-sm text-blue-700">
+                    <span className="font-semibold">การเปลี่ยนของเหลวล่าสุด:</span> {fluidLatest.mileage ? fluidLatest.mileage.toLocaleString() + ' กม.' : '-'}
+                    {fluidLatest.note && <span className="ml-2 text-gray-500">({fluidLatest.note})</span>}
+                  </div>
+                )}
               </div>
             )}
 
@@ -185,30 +262,39 @@ export default function ExpenseLogPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 ประเภทค่าใช้จ่าย <span className="text-red-500">*</span>
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <button
                   type="button"
                   onClick={() => setType("fuel")}
-                  className={`p-4 border-2 rounded-lg text-center transition-all ${
-                    type === "fuel"
+                  className={`p-4 border-2 rounded-lg text-center transition-all ${type === "fuel"
                       ? "border-teal-500 bg-teal-50 text-teal-700"
                       : "border-gray-300 hover:border-teal-300"
-                  }`}
+                    }`}
                 >
                   <div className="text-3xl mb-2">⛽</div>
-                  <div className="font-medium">เติมน้ำมัน</div>
+                  <div className="text-sm font-medium">เติมน้ำมัน</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setType("fluid")}
+                  className={`p-4 border-2 rounded-lg text-center transition-all ${type === "fluid"
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-gray-300 hover:border-blue-300"
+                    }`}
+                >
+                  <div className="text-3xl mb-2">🛢️</div>
+                  <div className="text-sm font-medium">ของเหลว</div>
                 </button>
                 <button
                   type="button"
                   onClick={() => setType("other")}
-                  className={`p-4 border-2 rounded-lg text-center transition-all ${
-                    type === "other"
+                  className={`p-4 border-2 rounded-lg text-center transition-all ${type === "other"
                       ? "border-teal-500 bg-teal-50 text-teal-700"
                       : "border-gray-300 hover:border-teal-300"
-                  }`}
+                    }`}
                 >
                   <div className="text-3xl mb-2">💰</div>
-                  <div className="font-medium">ค่าใช้จ่ายอื่นๆ</div>
+                  <div className="text-sm font-medium">อื่นๆ</div>
                 </button>
               </div>
             </div>
@@ -230,6 +316,23 @@ export default function ExpenseLogPage() {
               />
             </div>
 
+            {/* ชื่อรายการ (เฉพาะค่าใช้จ่ายอื่นๆ) */}
+            {type === "other" && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ชื่อรายการ <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={otherTitle}
+                  onChange={e => setOtherTitle(e.target.value)}
+                  placeholder="ระบุชื่อรายการ เช่น ค่าทางด่วน, ค่าซ่อมแซม"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  required
+                />
+              </div>
+            )}
+
             {/* เลขไมล์ (บังคับถ้าเลือกน้ำมัน) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -241,29 +344,43 @@ export default function ExpenseLogPage() {
                   value={mileage}
                   onChange={(e) => setMileage(e.target.value)}
                   placeholder="ระบุเลขไมล์ปัจจุบัน"
-                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  required={type === "fuel"}
+                  className="w-full max-w-xs px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  required={type === "fuel" || type === "fluid"}
                 />
                 <button
                   type="button"
-                  onClick={() => {
-                    if (lastFuelMileage) {
-                      setMileage(lastFuelMileage.toString());
-                    } else if (activeUsage?.startMileage) {
-                      setMileage(activeUsage.startMileage.toString());
-                    }
-                  }}
+                  onClick={openCamera}
                   className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all whitespace-nowrap"
                   title="แสกนเลขไมล์จากรถ"
                 >
                   📸 แสกน
                 </button>
+                {/* Modal กล้องถ่ายเลขไมล์ */}
+                {showCamera && (
+                  <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-4 flex flex-col items-center">
+                      <video ref={videoRef} width={320} height={240} autoPlay playsInline className="rounded border mb-2" />
+                      <canvas ref={canvasRef} width={320} height={240} style={{ display: 'none' }} />
+                      <button
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold mt-2"
+                        onClick={handleCapture}
+                      >ถ่ายภาพเลขไมล์</button>
+                      <button
+                        className="px-4 py-2 bg-gray-400 text-white rounded-lg font-bold mt-2"
+                        onClick={() => {
+                          setShowCamera(false);
+                          if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+                          setCameraStream(null);
+                        }}
+                      >ปิด</button>
+                    </div>
+                  </div>
+                )}
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                {type === "fuel" 
-                  ? "บังคับกรอกเมื่อเติมน้ำมัน - กดแสกนเพื่อใช้เลขไมล์จากการเติมล่าสุด"
-                  : "ไม่บังคับ - บันทึกเพื่อติดตามการใช้น้ำมัน"
-                }
+                {(type === "fuel") && "บังคับกรอกเมื่อเติมน้ำมัน - กดแสกนเพื่อใช้เลขไมล์จากภาพ"}
+                {(type === "fluid") && "บังคับกรอกเลขไมล์เมื่อเปลี่ยนถ่ายของเหลว"}
+                {(type === "other") && "ไม่บังคับ - บันทึกเพื่อติดตามค่าใช้จ่ายอื่นๆ"}
               </p>
             </div>
 
@@ -282,18 +399,17 @@ export default function ExpenseLogPage() {
             </div>
 
             {message && (
-              <div className={`p-3 rounded-lg text-sm text-center ${
-                message.includes('สำเร็จ') 
-                  ? 'bg-green-100 text-green-700' 
+              <div className={`p-3 rounded-lg text-sm text-center ${message.includes('สำเร็จ')
+                  ? 'bg-green-100 text-green-700'
                   : 'bg-red-100 text-red-700'
-              }`}>
+                }`}>
                 {message}
               </div>
             )}
 
             <button
               type="submit"
-              disabled={isSubmitting || !amount || (type === "fuel" && !mileage)}
+              disabled={isSubmitting || !amount || ((type === "fuel" || type === "fluid") && !mileage)}
               className="w-full py-3 bg-teal-600 text-white rounded-lg font-semibold hover:bg-teal-700 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'กำลังบันทึก...' : 'บันทึกค่าใช้จ่าย'}

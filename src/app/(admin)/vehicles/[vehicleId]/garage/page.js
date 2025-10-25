@@ -4,8 +4,72 @@ import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import Image from 'next/image';
+
+function GarageRecord({ record }) {
+  const formatDateTime = (value) => {
+    if (!value) return '-';
+    let dateObj;
+    if (value.seconds) {
+      dateObj = new Date(value.seconds * 1000);
+    } else {
+      dateObj = new Date(value);
+    }
+    return dateObj.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' }) +
+      ' ' + dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+  };
+  
+  const formatCurrency = (number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(number || 0);
+  
+  const translateStatus = (s) => {
+    if (!s) return '-';
+    switch (s) {
+      case 'pending': return 'รอดำเนินการ';
+      case 'in_progress': return 'กำลังซ่อม';
+      case 'completed': return 'เสร็จสิ้น';
+      case 'cancelled': return 'ยกเลิก';
+      case 'recorded': return 'บันทึกแล้ว';
+      default: return s;
+    }
+  };
+
+  const statusBadge = (st) => {
+    const map = {
+      pending: 'bg-yellow-100 text-yellow-800',
+      in_progress: 'bg-yellow-600 text-white',
+      completed: 'bg-green-100 text-green-800',
+      cancelled: 'bg-red-100 text-red-800',
+      recorded: 'bg-gray-100 text-gray-800',
+    };
+    return map[st] || 'bg-gray-100 text-gray-800';
+  };
+
+  // แสดง badge แหล่งที่มา
+  const sourceBadge = record.source === 'expenses' ? (
+    <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">จากทริป</span>
+  ) : null;
+
+  const displayCost = record.finalCost ?? record.cost ?? 0;
+  const displayMileage = record.odometerAtDropOff ?? record.mileage ?? null;
+
+  return (
+    <tr className="hover:bg-gray-50">
+      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{formatDateTime(record.createdAt)}</td>
+      <td className="px-4 py-3 text-sm text-gray-900">{record.vendor ?? '-'}</td>
+      <td className="px-4 py-3 text-sm text-gray-900">{record.details ?? '-'}</td>
+      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{displayMileage ? displayMileage.toLocaleString() + ' กม.' : '-'}</td>
+      <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">{formatCurrency(displayCost)}</td>
+      <td className="px-4 py-3 text-sm text-gray-900">
+        <div className="flex items-center gap-2">
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusBadge(record.maintenanceStatus)}`}>
+            {translateStatus(record.maintenanceStatus)}
+          </span>
+          {sourceBadge}
+        </div>
+      </td>
+    </tr>
+  );
+}
 
 export default function VehicleGaragePage() {
   const params = useParams();
@@ -111,101 +175,61 @@ export default function VehicleGaragePage() {
   });
 
   if (!vehicleId) return <p className="p-6">ไม่พบรหัสรถ</p>;
-  if (loading) return <p className="p-6">กำลังโหลดบันทึกส่งซ่อม...</p>;
+  if (loading) return <p>Loading garage logs...</p>;
+  
   // compute total maintenance cost for this vehicle (use finalCost when present, fallback to cost)
   const totalCost = allItems.reduce((sum, it) => {
     const c = Number(it.finalCost ?? it.cost ?? 0) || 0;
     return sum + c;
   }, 0);
 
-  const translateStatus = (s) => {
-    if (!s) return '-';
-    switch (s) {
-      case 'pending': return 'รอดำเนินการ';
-      case 'in_progress': return 'กำลังซ่อม';
-      case 'completed': return 'เสร็จสิ้น';
-      case 'cancelled': return 'ยกเลิก';
-      default: return s;
-    }
-  };
-
   return (
-    <div className="max-w-5xl mx-auto p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">บันทึกส่งซ่อมของรถ</h1>
-        {vehicle && (
-          <div className="flex items-center gap-3 text-sm text-gray-600">
-              <div className="w-16 h-16 bg-gray-100 rounded-md overflow-hidden flex-shrink-0">
-              {(vehicle.imageUrl || vehicle.photoURL || vehicle.image) ? (
-                <Image
-                  src={vehicle.imageUrl || vehicle.photoURL || vehicle.image}
-                  alt={`${vehicle.brand || ''} ${vehicle.model || ''}`}
-                  width={64}
-                  height={64}
-                  className="object-cover"
-                  unoptimized
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-2xl">🚗</div>
-              )}
-            </div>
-            <div className="leading-tight">
-              <div className="font-semibold">{vehicle.brand} {vehicle.model}</div>
-              <div className="text-xs">{vehicle.licensePlate}</div>
+    <div>
+      {vehicle && (
+        <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center space-x-4">
+            {vehicle.imageUrl && (
+              <Image src={vehicle.imageUrl} alt={`${vehicle.brand} ${vehicle.model}`} width={96} height={64} className="object-cover rounded-md shadow" unoptimized />
+            )}
+            <div>
+              <h1 className="text-3xl font-bold">บันทึกส่งซ่อมของรถ</h1>
+              <p className="text-xl text-gray-600">{vehicle.brand} {vehicle.model} ({vehicle.licensePlate})</p>
             </div>
           </div>
-        )}
-      </div>
-
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-sm">รวมค่าใช้จ่ายทั้งหมด: <span className="font-semibold">{totalCost.toLocaleString('th-TH')} บาท</span></div>
-      </div>
-
-      {allItems.length === 0 ? (
-        <p className="text-gray-500">ยังไม่มีบันทึกการส่งซ่อมสำหรับคันนี้</p>
-      ) : (
-        <div className="space-y-4">
-          {allItems.map(rec => {
-            const sourceBadge = rec.source === 'expenses' ? (
-              <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">จากทริป</span>
-            ) : null;
-            
-            return (
-              <div key={rec.id} className="bg-white rounded-lg shadow p-4">
-                <div className="flex justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <div className="font-semibold">อู่: {rec.vendor ?? '-'}</div>
-                      {sourceBadge}
-                    </div>
-                    <div className="text-sm text-gray-600">รายละเอียด: {rec.details ?? '-'}</div>
-                    <div className="mt-2 text-sm">ไมล์เมื่อส่ง: {rec.odometerAtDropOff ?? rec.mileage ?? '-'}</div>
-                    <div className="mt-2 text-sm">ไมล์ตอนรับ (ถ้ามี): {rec.finalMileage ?? '-'}</div>
-                  </div>
-                  <div className="text-right text-sm text-gray-600">
-                    <div className="mb-2">สถานะ: {translateStatus(rec.maintenanceStatus)}</div>
-                    <div className="mb-2">บันทึกเมื่อ: {rec.createdAt ? (rec.createdAt.seconds ? new Date(rec.createdAt.seconds*1000).toLocaleString('th-TH') : new Date(rec.createdAt).toLocaleString('th-TH')) : '-'}</div>
-                    <div className="mb-1">ค่าใช้จ่าย (ประเมิน/จริง): {rec.cost ? `${Number(rec.cost).toLocaleString('th-TH')} บาท` : '-'} / {rec.finalCost ? `${Number(rec.finalCost).toLocaleString('th-TH')} บาท` : '-'}</div>
-                    {rec.source === 'maintenances' && (
-                      <>
-                        <div className="mb-1">รายการอะไหล่: {rec.partsUsed ?? '-'}</div>
-                        {rec.invoiceNumber && (
-                          <div className="mb-1">เลขที่ใบแจ้งหนี้: {rec.invoiceNumber}</div>
-                        )}
-                        <div className="mb-1">มีประกัน: {rec.warranty ? 'ใช่' : 'ไม่'}</div>
-                        {rec.warranty && rec.warrantyDate && (
-                          <div className="mb-1">วันที่รับประกัน: {rec.warrantyDate.seconds ? new Date(rec.warrantyDate.seconds*1000).toLocaleDateString('th-TH') : new Date(rec.warrantyDate).toLocaleDateString('th-TH')}</div>
-                        )}
-                        {rec.receivedAt && <div className="text-xs text-gray-500">รับคืน: {rec.receivedAt.seconds ? new Date(rec.receivedAt.seconds*1000).toLocaleString('th-TH') : new Date(rec.receivedAt).toLocaleString('th-TH')}</div>}
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
         </div>
       )}
+
+      <div className="space-y-4">
+        {allItems.length > 0 && (
+          <div className="bg-gray-100 p-4 rounded-lg grid grid-cols-2 gap-4 font-bold text-gray-800">
+            <p>ราคารวมทั้งหมด</p>
+            <p className="text-right">{new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(totalCost)}</p>
+          </div>
+        )}
+        <div className="bg-white rounded-lg shadow overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">วันที่/เวลา</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">อู่/ผู้ให้บริการ</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">รายละเอียด</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">เลขไมล์</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">ค่าใช้จ่าย</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {allItems.length > 0 ? (
+                allItems.map(rec => <GarageRecord key={rec.id} record={rec} />)
+              ) : (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">ยังไม่มีบันทึกการส่งซ่อมสำหรับคันนี้</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

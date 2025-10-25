@@ -51,6 +51,7 @@ const formatDateTime = (timestamp) => {
 const getExpenseType = (type) => {
     switch (type) {
         case 'fuel': return '⛽ น้ำมัน';
+        case 'fluid': return '🛢️ เปลี่ยนของเหลว';
         case 'other': return '💰 อื่นๆ';
         default: return type;
     }
@@ -58,7 +59,7 @@ const getExpenseType = (type) => {
 
 // Component สำหรับแสดงรายการแจ้งเตือน
 function AlertList({ title, items, type }) {
-    const textColor = type === 'tax' ? 'text-red-600' : 'text-orange-600';
+    const textColor = type === 'tax' ? 'text-red-600' : type === 'insurance' ? 'text-orange-600' : 'text-blue-600';
 
     return (
         <div className="p-6 bg-white rounded-lg shadow-md">
@@ -68,7 +69,10 @@ function AlertList({ title, items, type }) {
                     <li key={item.id} className="flex justify-between items-center text-sm">
                         <span>{item.brand} {item.model} ({item.licensePlate})</span>
                         <span className={`font-semibold ${textColor}`}>
-                            หมดอายุ: {formatDate(type === 'tax' ? item.taxDueDate : item.insuranceExpireDate)}
+                            {type === 'fluidChange' 
+                                ? `เหลืออีก ${(10000 - item.mileageSinceLastChange).toLocaleString()} กม.`
+                                : `หมดอายุ: ${formatDate(type === 'tax' ? item.taxDueDate : item.insuranceExpireDate)}`
+                            }
                         </span>
                     </li>
                 )) : <p className="text-sm text-gray-500">ไม่มีรายการแจ้งเตือน</p>}
@@ -79,7 +83,7 @@ function AlertList({ title, items, type }) {
 
 export default function AdminDashboardPage() {
     const [stats, setStats] = useState({ available: 0, inUse: 0, maintenance: 0, totalUsage: 0 });
-    const [alerts, setAlerts] = useState({ tax: [], insurance: [] });
+    const [alerts, setAlerts] = useState({ tax: [], insurance: [], fluidChange: [] });
     const [activeUsages, setActiveUsages] = useState([]);
     const [recentExpenses, setRecentExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -90,10 +94,24 @@ export default function AdminDashboardPage() {
         const activeUsageQuery = query(collection(db, "vehicle-usage"), where("status", "==", "active"));
         const expensesQuery = query(collection(db, "expenses"));
         
-        const unsubVehicles = onSnapshot(vehiclesQuery, (snapshot) => {
+        const unsubVehicles = onSnapshot(vehiclesQuery, async (snapshot) => {
             let available = 0, inUse = 0, maintenance = 0;
-            let taxAlerts = [], insuranceAlerts = [];
+            let taxAlerts = [], insuranceAlerts = [], fluidChangeAlerts = [];
             const thirtyDaysFromNow = Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
+            // ดึงข้อมูล fluid expenses สำหรับตรวจสอบการเปลี่ยนของเหลว
+            const { getDocs } = await import('firebase/firestore');
+            const expensesSnapshot = await getDocs(query(collection(db, 'expenses'), where('type', '==', 'fluid')));
+            const fluidExpensesByVehicle = {};
+            
+            expensesSnapshot.docs.forEach(doc => {
+                const exp = doc.data();
+                if (exp.vehicleId && exp.mileage) {
+                    if (!fluidExpensesByVehicle[exp.vehicleId] || exp.mileage > fluidExpensesByVehicle[exp.vehicleId].mileage) {
+                        fluidExpensesByVehicle[exp.vehicleId] = exp;
+                    }
+                }
+            });
 
             snapshot.docs.forEach(doc => {
                 const vehicle = { id: doc.id, ...doc.data() };
@@ -104,10 +122,35 @@ export default function AdminDashboardPage() {
                 // เช็ควันหมดอายุ
                 if (vehicle.taxDueDate && vehicle.taxDueDate <= thirtyDaysFromNow) taxAlerts.push(vehicle);
                 if (vehicle.insuranceExpireDate && vehicle.insuranceExpireDate <= thirtyDaysFromNow) insuranceAlerts.push(vehicle);
+
+                // เช็คการเปลี่ยนของเหลว - เตือนเมื่อวิ่งเกือบ 10,000 กม. นับจากการเปลี่ยนครั้งล่าสุด
+                const lastFluidChange = fluidExpensesByVehicle[vehicle.id];
+                const currentMileage = vehicle.currentMileage || 0;
+                
+                if (lastFluidChange) {
+                    const mileageSinceLastChange = currentMileage - lastFluidChange.mileage;
+                    // แจ้งเตือนเมื่อวิ่งครบ 9,000 กม. (เหลืออีก 1,000 กม. ก่อนครบ 10,000)
+                    if (mileageSinceLastChange >= 9000 && mileageSinceLastChange < 10000) {
+                        fluidChangeAlerts.push({
+                            ...vehicle,
+                            lastFluidMileage: lastFluidChange.mileage,
+                            currentMileage,
+                            mileageSinceLastChange
+                        });
+                    }
+                } else if (currentMileage >= 9000) {
+                    // ถ้าไม่เคยเปลี่ยนเลย และไมล์ปัจจุบันเกือบ 10,000
+                    fluidChangeAlerts.push({
+                        ...vehicle,
+                        lastFluidMileage: 0,
+                        currentMileage,
+                        mileageSinceLastChange: currentMileage
+                    });
+                }
             });
             
             setStats(prev => ({ ...prev, available, inUse, maintenance }));
-            setAlerts({ tax: taxAlerts, insurance: insuranceAlerts });
+            setAlerts({ tax: taxAlerts, insurance: insuranceAlerts, fluidChange: fluidChangeAlerts });
         });
 
         const unsubUsages = onSnapshot(activeUsageQuery, (snapshot) => {
@@ -147,7 +190,6 @@ export default function AdminDashboardPage() {
     return (
         <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard ภาพรวม</h1>
-            
             {/* ส่วนแสดงข้อมูลสรุป */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard title="รถว่าง" value={stats.available} icon="✅" link="/vehicles" />
@@ -156,48 +198,12 @@ export default function AdminDashboardPage() {
                 <StatCard title="ประวัติทั้งหมด" value={stats.totalUsage} icon="📊" link="/vehicles-analysis" />
             </div>
 
-            {/* รถที่กำลังใช้งาน */}
-            {activeUsages.length > 0 && (
-                <div className="mt-10">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">รถที่กำลังใช้งาน ({activeUsages.length})</h2>
-                    <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ทะเบียน</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ผู้ใช้</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เริ่มใช้งาน</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ไมล์เริ่มต้น</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จุดหมาย</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {activeUsages.map(usage => (
-                                        <tr key={usage.id} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                                {usage.vehicleLicensePlate || '-'}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {usage.userName || '-'}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {formatDateTime(usage.startTime)}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {usage.startMileage?.toLocaleString()} กม.
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {usage.destination || '-'}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* ส่วนแจ้งเตือน */}
+            <div className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <AlertList title="ภาษีรถยนต์จะหมดอายุใน 30 วัน" items={alerts.tax} type="tax" />
+                <AlertList title="ประกันรถยนต์จะหมดอายุใน 30 วัน" items={alerts.insurance} type="insurance" />
+                <AlertList title="ใกล้ครบกำหนดเปลี่ยนของเหลว (10,000 กม.)" items={alerts.fluidChange} type="fluidChange" />
+            </div>
 
             {/* ค่าใช้จ่ายล่าสุด */}
             {recentExpenses.length > 0 && (
@@ -237,12 +243,6 @@ export default function AdminDashboardPage() {
                     </div>
                 </div>
             )}
-
-            {/* ส่วนแจ้งเตือน */}
-            <div className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <AlertList title="ภาษีรถยนต์จะหมดอายุใน 30 วัน" items={alerts.tax} type="tax" />
-                <AlertList title="ประกันรถยนต์จะหมดอายุใน 30 วัน" items={alerts.insurance} type="insurance" />
-            </div>
         </div>
     );
 }

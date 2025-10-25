@@ -144,8 +144,9 @@ export default function AddVehiclePage() {
                 <input name="color" value={form.color} onChange={handleChange} className="w-full p-3 border rounded-md" />
               </div>
               <div>
-                <label className="block mb-1 text-sm font-medium">เลขไมล์ปัจจุบัน</label>
+                <label className="block mb-1 text-sm font-medium">เลขไมล์เริ่มต้น</label>
                 <input name="currentMileage" type="number" value={form.currentMileage} onChange={handleChange} className="w-full p-3 border rounded-md" required />
+                <p className="text-xs text-gray-500 mt-1">* กรอกเลขไมล์เริ่มต้นของรถ (จะไม่เปลี่ยนแปลงตามการใช้งาน)</p>
               </div>
             </div>
 
