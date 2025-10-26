@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, orderBy, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
 import Image from 'next/image';
 import { getImageUrl } from '@/lib/imageHelpers';
 import { useRouter } from 'next/navigation';
@@ -16,26 +16,34 @@ function UsageHistoryCard({ usage }) {
     const [isExpanded, setIsExpanded] = useState(false);
 
     useEffect(() => {
-        if (usage.vehicleId) {
-            const vehicleRef = doc(db, "vehicles", usage.vehicleId);
-            const unsubscribe = onSnapshot(vehicleRef, (doc) => {
-                if (doc.exists()) {
-                    setVehicle(doc.data());
+        let ignore = false;
+        async function fetchVehicle() {
+            if (usage.vehicleId) {
+                const vehicleRef = doc(db, "vehicles", usage.vehicleId);
+                const vehicleSnap = await getDoc(vehicleRef);
+                if (!ignore && vehicleSnap.exists()) {
+                    setVehicle(vehicleSnap.data());
                 }
-            });
-            return unsubscribe;
+            }
         }
+        fetchVehicle();
+        return () => { ignore = true; };
     }, [usage.vehicleId]);
 
     useEffect(() => {
-        if (usage.id) {
-            const q = query(collection(db, "expenses"), where("usageId", "==", usage.id));
-            const unsubscribe = onSnapshot(q, (snapshot) => {
-                const expensesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setExpenses(expensesData);
-            });
-            return unsubscribe;
+        let ignore = false;
+        async function fetchExpenses() {
+            if (usage.id) {
+                const q = query(collection(db, "expenses"), where("usageId", "==", usage.id));
+                const snapshot = await getDocs(q);
+                if (!ignore) {
+                    const expensesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    setExpenses(expensesData);
+                }
+            }
         }
+        fetchExpenses();
+        return () => { ignore = true; };
     }, [usage.id]);
 
     const formatDateTime = (dateString) => {
@@ -138,38 +146,39 @@ export default function MyTripsPage() {
     const router = useRouter();
 
     useEffect(() => {
-        if (!user) {
-            setLoading(false);
-            return;
+        let ignore = false;
+        async function fetchUsageHistory() {
+            if (!user) {
+                setLoading(false);
+                return;
+            }
+            const q = query(
+                collection(db, "vehicle-usage"),
+                where("userId", "==", userProfile?.lineId || user.uid),
+                orderBy("startTime", "desc")
+            );
+            const snapshot = await getDocs(q);
+            if (!ignore) {
+                const historyData = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    // Convert Firestore timestamps to ISO strings for rendering
+                    if (data.startTime?.toDate) {
+                        data.startTime = data.startTime.toDate().toISOString();
+                    }
+                    if (data.endTime?.toDate) {
+                        data.endTime = data.endTime.toDate().toISOString();
+                    }
+                    if (data.createdAt?.toDate) {
+                        data.createdAt = data.createdAt.toDate().toISOString();
+                    }
+                    return { id: doc.id, ...data };
+                });
+                setUsageHistory(historyData);
+                setLoading(false);
+            }
         }
-
-        // Query vehicle-usage collection for this user's history
-        const q = query(
-            collection(db, "vehicle-usage"),
-            where("userId", "==", userProfile?.lineId || user.uid),
-            orderBy("startTime", "desc")
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const historyData = snapshot.docs.map(doc => {
-                const data = doc.data();
-                // Convert Firestore timestamps to ISO strings for rendering
-                if (data.startTime?.toDate) {
-                    data.startTime = data.startTime.toDate().toISOString();
-                }
-                if (data.endTime?.toDate) {
-                    data.endTime = data.endTime.toDate().toISOString();
-                }
-                if (data.createdAt?.toDate) {
-                    data.createdAt = data.createdAt.toDate().toISOString();
-                }
-                return { id: doc.id, ...data };
-            });
-            setUsageHistory(historyData);
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
+        fetchUsageHistory();
+        return () => { ignore = true; };
     }, [user]);
 
     if (loading) {

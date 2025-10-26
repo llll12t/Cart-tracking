@@ -37,25 +37,23 @@ export default function MyVehiclePage() {
                 if (result.success && result.usage) {
                     setActiveUsage(result.usage);
                     setEndMileage(result.usage.startMileage?.toString() || "");
-                    // Fetch vehicle details
+                    // Fetch vehicle details (realtime)
                     if (result.usage.vehicleId) {
                         const vehicleRef = doc(db, "vehicles", result.usage.vehicleId);
-                        const unsubVehicle = onSnapshot(vehicleRef, (doc) => {
-                            if (doc.exists()) {
-                                setVehicle({ id: doc.id, ...doc.data() });
-                                setLoading(false); // Set loading false after vehicle data loaded
+                        const unsubVehicle = onSnapshot(vehicleRef, (docSnap) => {
+                            if (docSnap.exists()) {
+                                setVehicle({ id: docSnap.id, ...docSnap.data() });
                             } else {
-                                // ถ้าไม่มี vehicle document ให้ใช้ข้อมูลจาก usage แทน
                                 setVehicle({
                                     id: result.usage.vehicleId,
                                     licensePlate: result.usage.vehicleLicensePlate,
                                     brand: '',
                                     model: ''
                                 });
-                                setLoading(false); // Set loading false even if vehicle not found
                             }
+                            setLoading(false);
                         });
-                        // Cleanup
+                        // Cleanup realtime listener
                         return () => unsubVehicle();
                     } else {
                         setLoading(false);

@@ -40,8 +40,8 @@ export default function SettingsPage() {
                   <input type="checkbox" checked={!!notifSettings.admin?.booking_created} onChange={e => setNotifSettings(s => ({...s, admin: {...s.admin, booking_created: e.target.checked}}))} />
                 </label>
                 <label className="flex items-center justify-between mt-2">
-                  <span className="text-sm">คืนรถ</span>
-                  <input type="checkbox" checked={!!notifSettings.admin?.vehicle_returned} onChange={e => setNotifSettings(s => ({...s, admin: {...s.admin, vehicle_returned: e.target.checked}}))} />
+                  <span className="text-sm">เมื่อส่งรถ</span>
+                  <input type="checkbox" checked={!!notifSettings.admin?.vehicle_sent} onChange={e => setNotifSettings(s => ({...s, admin: {...s.admin, vehicle_sent: e.target.checked}}))} />
                 </label>
               </div>
 
@@ -51,10 +51,6 @@ export default function SettingsPage() {
                 <label className="flex items-center justify-between mt-2">
                   <span className="text-sm">เมื่อมีการจอง</span>
                   <input type="checkbox" checked={!!notifSettings.driver?.booking_created} onChange={e => setNotifSettings(s => ({...s, driver: {...s.driver, booking_created: e.target.checked}}))} />
-                </label>
-                <label className="flex items-center justify-between mt-2">
-                  <span className="text-sm">อนุมัติรถแล้ว</span>
-                  <input type="checkbox" checked={!!notifSettings.driver?.booking_approved} onChange={e => setNotifSettings(s => ({...s, driver: {...s.driver, booking_approved: e.target.checked}}))} />
                 </label>
                 <label className="flex items-center justify-between mt-2">
                   <span className="text-sm">เมื่อส่งรถ</span>
@@ -70,8 +66,8 @@ export default function SettingsPage() {
                   <input type="checkbox" checked={!!notifSettings.employee?.booking_created} onChange={e => setNotifSettings(s => ({...s, employee: {...s.employee, booking_created: e.target.checked}}))} />
                 </label>
                 <label className="flex items-center justify-between mt-2">
-                  <span className="text-sm">คืนรถ</span>
-                  <input type="checkbox" checked={!!notifSettings.employee?.vehicle_returned} onChange={e => setNotifSettings(s => ({...s, employee: {...s.employee, vehicle_returned: e.target.checked}}))} />
+                  <span className="text-sm">เมื่อส่งรถ</span>
+                  <input type="checkbox" checked={!!notifSettings.employee?.vehicle_sent} onChange={e => setNotifSettings(s => ({...s, employee: {...s.employee, vehicle_sent: e.target.checked}}))} />
                 </label>
               </div>
 

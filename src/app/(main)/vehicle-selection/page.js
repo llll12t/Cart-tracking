@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { getImageUrl } from '@/lib/imageHelpers';
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 
 export default function VehicleSelectionPage() {
   const { user, userProfile } = useAuth();
@@ -23,18 +23,20 @@ export default function VehicleSelectionPage() {
 
   // ดึงรายการรถที่พร้อมใช้งาน (status === 'available')
   useEffect(() => {
-    const q = query(collection(db, "vehicles"), where("status", "==", "available"));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const availableVehicles = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(v => v.status === 'available');
-      
-      setVehicles(availableVehicles);
-      setLoadingVehicles(false);
-    });
-
-    return () => unsubscribe();
+    let ignore = false;
+    async function fetchVehicles() {
+      const q = query(collection(db, "vehicles"), where("status", "==", "available"));
+      const snapshot = await getDocs(q);
+      if (!ignore) {
+        const availableVehicles = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(v => v.status === 'available');
+        setVehicles(availableVehicles);
+        setLoadingVehicles(false);
+      }
+    }
+    fetchVehicles();
+    return () => { ignore = true; };
   }, []);
 
   // Close dropdown on outside click

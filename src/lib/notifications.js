@@ -1,19 +1,6 @@
 import admin from '@/lib/firebaseAdmin';
 import fetch from 'node-fetch';
-import {
-  bookingCreatedAdmin,
-  bookingApprovalRequestAdmin,
-  bookingApprovedAdmin,
-  bookingRejectedAdmin,
-  vehicleSentAdmin,
-  vehicleReturnedAdmin,
-  bookingCreatedDriver,
-  bookingApprovedDriver,
-  bookingRejectedDriver,
-  vehicleSentDriver,
-  vehicleReturnedDriver,
-  bookingCreatedEmployee
-} from './lineFlexMessages';
+import { bookingCreatedFlex, vehicleSentFlex } from './lineFlexMessages';
 
 const db = admin.firestore();
 const LINE_PUSH_ENDPOINT = 'https://api.line.me/v2/bot/message/push';
@@ -122,27 +109,19 @@ export async function sendNotificationsForEvent(event, booking) {
     return res;
   }
 
-  // Build templates
+  // Build templates (only booking_created and vehicle_sent)
   const templates = {
     admin: {
-      booking_created: bookingCreatedAdmin(b),
-      booking_approval_request: bookingApprovalRequestAdmin(b),
-      booking_approved: bookingApprovedAdmin(b),
-      booking_rejected: bookingRejectedAdmin(b),
-      vehicle_sent: vehicleSentAdmin(b),
-      vehicle_returned: vehicleReturnedAdmin(b)
+      booking_created: bookingCreatedFlex(b),
+      vehicle_sent: vehicleSentFlex(b)
     },
     driver: {
-      booking_created: bookingCreatedDriver(b),
-      booking_approved: bookingApprovedDriver(b),
-      booking_rejected: bookingRejectedDriver(b),
-      vehicle_sent: vehicleSentDriver(b),
-      vehicle_returned: vehicleReturnedDriver(b)
+      booking_created: bookingCreatedFlex(b),
+      vehicle_sent: vehicleSentFlex(b)
     },
     employee: {
-      booking_created: bookingCreatedEmployee(b),
-      booking_rejected: bookingRejectedAdmin(b),
-      vehicle_returned: vehicleReturnedAdmin(b)
+      booking_created: bookingCreatedFlex(b),
+      vehicle_sent: vehicleSentFlex(b)
     }
   };
 
