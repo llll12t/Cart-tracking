@@ -56,6 +56,11 @@ export default function AdminSidebar({ isOpen = false, onClose = () => { } }) {
                 วิเคราะห์การใช้งานรถ
               </Link>
             </li>
+                <li className="mb-4">
+              <Link href="/trip-history" className={`block p-2 rounded hover:bg-white/20 ${pathname === '/vehicles-analysis' ? 'bg-white/20' : ''}`} aria-current={pathname === '/vehicles-analysis' ? 'page' : undefined}>
+                ประวัติการใช้งานรถ
+              </Link>
+            </li>
             <li className="mb-4">
               <Link href="/users" className={`block p-2 rounded hover:bg-white/20 ${pathname === '/users' ? 'bg-white/20' : ''}`} aria-current={pathname === '/users' ? 'page' : undefined}>
                 จัดการผู้ใช้งาน
@@ -113,6 +118,11 @@ export default function AdminSidebar({ isOpen = false, onClose = () => { } }) {
             <li className="mb-4">
               <Link href="/vehicles-analysis" className={`block p-2 rounded hover:bg-white/20 ${pathname === '/vehicles-analysis' ? 'bg-white/20' : ''}`} onClick={onClose}>
                 วิเคราะห์การใช้งานรถ
+              </Link>
+            </li>
+            <li className="mb-4">
+              <Link href="/trip-history" className={`block p-2 rounded hover:bg-white/20 ${pathname === '/vehicles-analysis' ? 'bg-white/20' : ''}`} aria-current={pathname === '/vehicles-analysis' ? 'page' : undefined}>
+              ประวัติการใช้งานรถ
               </Link>
             </li>
             <li className="mb-4">

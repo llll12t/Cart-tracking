@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, query, where, orderBy, onSnapshot, doc, getDoc, collectionGroup } from 'firebase/firestore';
 import Image from 'next/image';
@@ -29,6 +29,13 @@ export default function TripHistoryPage() {
   const [expandedId, setExpandedId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterVehicle, setFilterVehicle] = useState('');
+  const [filterUser, setFilterUser] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
 
   useEffect(() => {
     // Load completed vehicle-usage records ordered by endTime desc
@@ -85,15 +92,185 @@ export default function TripHistoryPage() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">กำลังโหลดประวัติการเดินทาง...</div>;
 
+  // Filter trips
+  const filteredTrips = trips.filter(trip => {
+    // Search term (search in vehicle, user, destination, purpose)
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      const matchesSearch = 
+        (trip.vehicleLicensePlate?.toLowerCase().includes(search)) ||
+        (trip.vehicle?.licensePlate?.toLowerCase().includes(search)) ||
+        (trip.vehicle?.brand?.toLowerCase().includes(search)) ||
+        (trip.vehicle?.model?.toLowerCase().includes(search)) ||
+        (trip.userName?.toLowerCase().includes(search)) ||
+        (trip.userId?.toLowerCase().includes(search)) ||
+        (trip.destination?.toLowerCase().includes(search)) ||
+        (trip.purpose?.toLowerCase().includes(search));
+      
+      if (!matchesSearch) return false;
+    }
+    
+    // Filter by vehicle
+    if (filterVehicle && trip.vehicleLicensePlate !== filterVehicle) {
+      return false;
+    }
+    
+    // Filter by user
+    if (filterUser && trip.userName !== filterUser) {
+      return false;
+    }
+    
+    // Filter by date range
+    if (filterDateFrom || filterDateTo) {
+      const tripDate = trip.startTime?.seconds ? new Date(trip.startTime.seconds * 1000) : new Date(trip.startTime);
+      
+      if (filterDateFrom) {
+        const fromDate = new Date(filterDateFrom);
+        if (tripDate < fromDate) return false;
+      }
+      
+      if (filterDateTo) {
+        const toDate = new Date(filterDateTo);
+        toDate.setHours(23, 59, 59, 999); // End of day
+        if (tripDate > toDate) return false;
+      }
+    }
+    
+    return true;
+  });
+
+  // Get unique vehicles and users for filter dropdowns
+  const uniqueVehicles = [...new Set(trips.map(t => t.vehicleLicensePlate).filter(Boolean))];
+  const uniqueUsers = [...new Set(trips.map(t => t.userName).filter(Boolean))];
+
   // Pagination
-  const totalPages = Math.ceil(trips.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredTrips.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentTrips = trips.slice(startIndex, endIndex);
+  const currentTrips = filteredTrips.slice(startIndex, endIndex);
+  
+  // Reset to page 1 when filters change
+  const resetPage = () => setCurrentPage(1);
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">ประวัติการเดินทาง</h1>
+
+      {/* Search and Filters */}
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Search */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              ค้นหา
+            </label>
+            <input
+              type="text"
+              placeholder="ค้นหาทะเบียนรถ, ผู้ใช้, จุดหมาย..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          
+          {/* Vehicle Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              รถ
+            </label>
+            <select
+              value={filterVehicle}
+              onChange={(e) => {
+                setFilterVehicle(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">ทั้งหมด</option>
+              {uniqueVehicles.map((vehicle) => (
+                <option key={vehicle} value={vehicle}>{vehicle}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* User Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              ผู้ใช้งาน
+            </label>
+            <select
+              value={filterUser}
+              onChange={(e) => {
+                setFilterUser(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">ทั้งหมด</option>
+              {uniqueUsers.map((user) => (
+                <option key={user} value={user}>{user}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date From */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              ตั้งแต่วันที่
+            </label>
+            <input
+              type="date"
+              value={filterDateFrom}
+              onChange={(e) => {
+                setFilterDateFrom(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Date To */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              ถึงวันที่
+            </label>
+            <input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => {
+                setFilterDateTo(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* Clear Filters Button */}
+        {(searchTerm || filterVehicle || filterUser || filterDateFrom || filterDateTo) && (
+          <div className="mt-4">
+            <button
+              onClick={() => {
+                setSearchTerm('');
+                setFilterVehicle('');
+                setFilterUser('');
+                setFilterDateFrom('');
+                setFilterDateTo('');
+                setCurrentPage(1);
+              }}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+            >
+              ล้างตัวกรอง
+            </button>
+            <span className="ml-4 text-sm text-gray-600">
+              พบ {filteredTrips.length} รายการ
+            </span>
+          </div>
+        )}
+      </div>
 
       {trips.length === 0 && <div className="bg-white rounded p-6 shadow">ไม่พบประวัติการเดินทาง</div>}
 
@@ -113,7 +290,7 @@ export default function TripHistoryPage() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {currentTrips.map(t => (
-                  <>
+                  <Fragment key={t.id}>
                     <tr key={t.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -199,7 +376,7 @@ export default function TripHistoryPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
