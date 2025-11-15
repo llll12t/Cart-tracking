@@ -40,8 +40,12 @@ export default function SettingsPage() {
                   <input type="checkbox" checked={!!notifSettings.admin?.booking_created} onChange={e => setNotifSettings(s => ({...s, admin: {...s.admin, booking_created: e.target.checked}}))} />
                 </label>
                 <label className="flex items-center justify-between mt-2">
-                  <span className="text-sm">เมื่อส่งรถ</span>
-                  <input type="checkbox" checked={!!notifSettings.admin?.vehicle_sent} onChange={e => setNotifSettings(s => ({...s, admin: {...s.admin, vehicle_sent: e.target.checked}}))} />
+                  <span className="text-sm">เมื่อยืมรถ</span>
+                  <input type="checkbox" checked={!!notifSettings.admin?.vehicle_borrowed} onChange={e => setNotifSettings(s => ({...s, admin: {...s.admin, vehicle_borrowed: e.target.checked}}))} />
+                </label>
+                <label className="flex items-center justify-between mt-2">
+                  <span className="text-sm">เมื่อคืนรถ</span>
+                  <input type="checkbox" checked={!!notifSettings.admin?.vehicle_returned} onChange={e => setNotifSettings(s => ({...s, admin: {...s.admin, vehicle_returned: e.target.checked}}))} />
                 </label>
               </div>
 
@@ -53,8 +57,12 @@ export default function SettingsPage() {
                   <input type="checkbox" checked={!!notifSettings.driver?.booking_created} onChange={e => setNotifSettings(s => ({...s, driver: {...s.driver, booking_created: e.target.checked}}))} />
                 </label>
                 <label className="flex items-center justify-between mt-2">
-                  <span className="text-sm">เมื่อส่งรถ</span>
-                  <input type="checkbox" checked={!!notifSettings.driver?.vehicle_sent} onChange={e => setNotifSettings(s => ({...s, driver: {...s.driver, vehicle_sent: e.target.checked}}))} />
+                  <span className="text-sm">เมื่อยืมรถ</span>
+                  <input type="checkbox" checked={!!notifSettings.driver?.vehicle_borrowed} onChange={e => setNotifSettings(s => ({...s, driver: {...s.driver, vehicle_borrowed: e.target.checked}}))} />
+                </label>
+                <label className="flex items-center justify-between mt-2">
+                  <span className="text-sm">เมื่อคืนรถ</span>
+                  <input type="checkbox" checked={!!notifSettings.driver?.vehicle_returned} onChange={e => setNotifSettings(s => ({...s, driver: {...s.driver, vehicle_returned: e.target.checked}}))} />
                 </label>
               </div>
 
@@ -66,10 +74,29 @@ export default function SettingsPage() {
                   <input type="checkbox" checked={!!notifSettings.employee?.booking_created} onChange={e => setNotifSettings(s => ({...s, employee: {...s.employee, booking_created: e.target.checked}}))} />
                 </label>
                 <label className="flex items-center justify-between mt-2">
-                  <span className="text-sm">เมื่อส่งรถ</span>
-                  <input type="checkbox" checked={!!notifSettings.employee?.vehicle_sent} onChange={e => setNotifSettings(s => ({...s, employee: {...s.employee, vehicle_sent: e.target.checked}}))} />
+                  <span className="text-sm">เมื่อยืมรถ</span>
+                  <input type="checkbox" checked={!!notifSettings.employee?.vehicle_borrowed} onChange={e => setNotifSettings(s => ({...s, employee: {...s.employee, vehicle_borrowed: e.target.checked}}))} />
+                </label>
+                <label className="flex items-center justify-between mt-2">
+                  <span className="text-sm">เมื่อคืนรถ</span>
+                  <input type="checkbox" checked={!!notifSettings.employee?.vehicle_returned} onChange={e => setNotifSettings(s => ({...s, employee: {...s.employee, vehicle_returned: e.target.checked}}))} />
                 </label>
               </div>
+
+              {/* Show message if all toggles are off */}
+              {[
+                notifSettings.admin?.booking_created,
+                notifSettings.admin?.vehicle_borrowed,
+                notifSettings.admin?.vehicle_returned,
+                notifSettings.driver?.booking_created,
+                notifSettings.driver?.vehicle_borrowed,
+                notifSettings.driver?.vehicle_returned,
+                notifSettings.employee?.booking_created,
+                notifSettings.employee?.vehicle_borrowed,
+                notifSettings.employee?.vehicle_returned
+              ].every(v => !v) && (
+                <div className="text-center text-sm text-red-500 font-medium">คุณไม่ได้เปิดการแจ้งเตือนใด ๆ</div>
+              )}
 
               <div className="flex gap-3 justify-end">
                 <button onClick={async () => {

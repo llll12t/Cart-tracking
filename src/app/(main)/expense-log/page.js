@@ -223,11 +223,15 @@ export default function ExpenseLogPage() {
   useEffect(() => {
     if (!user && !userProfile) return;
 
+    let isMounted = true;
+
     const fetchActiveUsage = async () => {
       try {
         const userId = userProfile?.lineId || user?.uid;
         const response = await fetch(`/api/vehicle-usage/active?userId=${userId}`);
         const result = await response.json();
+
+        if (!isMounted) return;
 
         if (result.success && result.usage) {
           setActiveUsage(result.usage);
@@ -235,6 +239,8 @@ export default function ExpenseLogPage() {
           // Fetch expenses ด้วย vehicleId เพื่อให้ได้ประวัติการเติมน้ำมันของรถคันนี้ทั้งหมด
           const expensesResponse = await fetch(`/api/expenses?vehicleId=${result.usage.vehicleId}`);
           const expensesResult = await expensesResponse.json();
+
+          if (!isMounted) return;
 
           if (expensesResult.success && expensesResult.expenses) {
             // หาเลขไมล์จากการเติมน้ำมันครั้งล่าสุด
@@ -278,7 +284,12 @@ export default function ExpenseLogPage() {
     };
 
     fetchActiveUsage();
-  }, [user, userProfile, router]);
+
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

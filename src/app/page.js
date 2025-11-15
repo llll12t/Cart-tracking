@@ -10,18 +10,26 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
       // หาก Login สำเร็จ ให้ redirect ไปหน้า dashboard
       router.push('/dashboard'); 
     } catch (err) {
-      // ไม่ต้อง alert ให้แสดงข้อความ error ใน UI
-      setError(err.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
+      // แสดงข้อความ error ที่อ่านง่ายสำหรับ auth/invalid-credential
+      if (err.code === 'auth/invalid-credential') {
+        setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+      } else {
+        setError(err.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -68,9 +76,10 @@ export default function LoginPage() {
           <div>
             <button
               type="submit"
-              className="w-full px-4 py-2 font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="w-full px-4 py-2 font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-60"
+              disabled={loading}
             >
-              Login
+              {loading ? 'กำลังเข้าสู่ระบบ...' : 'Login'}
             </button>
           </div>
         </form>

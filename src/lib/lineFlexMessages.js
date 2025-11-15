@@ -96,3 +96,38 @@ export function vehicleSentFlex(booking) {
   ];
   return { altText: `รถ ${booking.vehicleLicensePlate || ''} ถูกส่งแล้ว`, contents: baseBubble(title, fields) };
 }
+
+// แจ้งเตือน "ยืมรถ" (เริ่มใช้งานรถ)
+export function vehicleBorrowedFlex(usage) {
+  const title = 'มีการยืมรถ';
+  const userName = usage.userName || usage.requesterName || '-';
+  const fields = [
+    `ผู้ยืม: ${userName}`,
+    `รถ: ${usage.vehicleLicensePlate || '-'}`,
+    `เริ่มใช้: ${fmtDate(usage.startTime || Date.now())}`,
+    `จุดหมาย: ${usage.destination || '-'}`,
+    `วัตถุประสงค์: ${usage.purpose || '-'}`
+  ];
+  return { altText: `มีการยืมรถ ${usage.vehicleLicensePlate || ''}`, contents: baseBubble(title, fields) };
+}
+
+// แจ้งเตือน "คืนรถ" (ส่งคืนรถแล้ว)
+export function vehicleReturnedFlex(usage) {
+  const title = 'มีการคืนรถ';
+  console.log('vehicleReturnedFlex - usage.userName:', usage.userName);
+  console.log('vehicleReturnedFlex - usage.requesterName:', usage.requesterName);
+  const userName = usage.userName || usage.requesterName || '-';
+  const fields = [
+    `ผู้ยืม: ${userName}`,
+    `รถ: ${usage.vehicleLicensePlate || '-'}`,
+    `คืนเมื่อ: ${fmtDate(usage.endTime || Date.now())}`
+  ];
+  if (usage.totalDistance !== null && usage.totalDistance !== undefined) {
+    fields.push(`ระยะทาง: ${usage.totalDistance} กม.`);
+  }
+  if (usage.totalExpenses !== null && usage.totalExpenses !== undefined && usage.totalExpenses > 0) {
+    fields.push(`💰 ค่าใช้จ่ายรวม: ${usage.totalExpenses.toLocaleString()} บาท`);
+  }
+  console.log('vehicleReturnedFlex - totalExpenses:', usage.totalExpenses);
+  return { altText: `มีการคืนรถ ${usage.vehicleLicensePlate || ''}`, contents: baseBubble(title, fields) };
+}

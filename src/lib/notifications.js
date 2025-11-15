@@ -1,6 +1,6 @@
 import admin from '@/lib/firebaseAdmin';
 import fetch from 'node-fetch';
-import { bookingCreatedFlex, vehicleSentFlex } from './lineFlexMessages';
+import { bookingCreatedFlex, vehicleSentFlex, vehicleBorrowedFlex, vehicleReturnedFlex } from './lineFlexMessages';
 
 const db = admin.firestore();
 const LINE_PUSH_ENDPOINT = 'https://api.line.me/v2/bot/message/push';
@@ -8,7 +8,11 @@ const ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || process.env.NEXT_P
 
 function normalizeBooking(b) {
   if (!b) return null;
-  return {
+  
+  console.log('normalizeBooking - input totalExpenses:', b.totalExpenses, 'type:', typeof b.totalExpenses);
+  console.log('normalizeBooking - input expenses:', b.expenses);
+  
+  const normalized = {
     id: b.id || b.bookingId || b._id || '',
     requesterName: b.requesterName || b.requester || b.userName || '',
     userEmail: b.userEmail || b.requesterEmail || b.requester?.email || '',
@@ -26,14 +30,24 @@ function normalizeBooking(b) {
     endCalendarDate: b.endCalendarDate || b.endDate || null,
     // timestamps / lifecycle
     sentAt: b.sentAt || null,
-    returnedAt: b.returnedAt || b.endDateTime || null
-    ,
+    returnedAt: b.returnedAt || b.endDateTime || null,
+    // usage data fields
+    startTime: b.startTime || null,
+    endTime: b.endTime || null,
+    destination: b.destination || null,
+    purpose: b.purpose || null,
+    totalDistance: b.totalDistance !== undefined ? b.totalDistance : null,
     // mileage and expenses (may be attached when server fetched full booking)
     startMileage: b.startMileage || null,
     endMileage: b.endMileage || null,
-    totalExpenses: typeof b.totalExpenses === 'number' ? b.totalExpenses : null,
-    expenses: b.expenses || null
+    totalExpenses: typeof b.totalExpenses === 'number' ? b.totalExpenses : 0,
+    expenses: Array.isArray(b.expenses) ? b.expenses : []
   };
+  
+  console.log('normalizeBooking - output totalExpenses:', normalized.totalExpenses);
+  console.log('normalizeBooking - output expenses:', normalized.expenses);
+  
+  return normalized;
 }
 
 async function sendPushMessage(to, message) {
@@ -73,8 +87,12 @@ export async function sendNotificationsForEvent(event, booking) {
   // the authoritative booking record and related expenses from Firestore
   // so notifications can include server-side timestamps, mileage and totals.
   let fullBooking = booking || {};
+  
+  // Store original expenses and totalExpenses if provided (for vehicle_returned/vehicle_borrowed)
+  const hasExpensesData = booking && (typeof booking.totalExpenses === 'number' || Array.isArray(booking.expenses));
+  
   try {
-    if (booking && booking.id) {
+    if (booking && booking.id && !hasExpensesData) {
       const snap = await db.collection('bookings').doc(booking.id).get();
       if (snap.exists) {
         fullBooking = { ...(booking || {}), ...snap.data(), id: booking.id };
@@ -91,6 +109,8 @@ export async function sendNotificationsForEvent(event, booking) {
   } catch (e) {
     console.warn('Failed to load full booking record for notifications, proceeding with provided payload', e);
   }
+  
+  console.log('sendNotificationsForEvent - fullBooking before normalize:', { totalExpenses: fullBooking.totalExpenses, expensesCount: fullBooking.expenses?.length });
 
   const b = normalizeBooking(fullBooking);
   // Load settings
@@ -113,15 +133,21 @@ export async function sendNotificationsForEvent(event, booking) {
   const templates = {
     admin: {
       booking_created: bookingCreatedFlex(b),
-      vehicle_sent: vehicleSentFlex(b)
+      vehicle_sent: vehicleSentFlex(b),
+      vehicle_borrowed: null,  // Will be set from usage data
+      vehicle_returned: null   // Will be set from usage data
     },
     driver: {
       booking_created: bookingCreatedFlex(b),
-      vehicle_sent: vehicleSentFlex(b)
+      vehicle_sent: vehicleSentFlex(b),
+      vehicle_borrowed: null,
+      vehicle_returned: null
     },
     employee: {
       booking_created: bookingCreatedFlex(b),
-      vehicle_sent: vehicleSentFlex(b)
+      vehicle_sent: vehicleSentFlex(b),
+      vehicle_borrowed: null,
+      vehicle_returned: null
     }
   };
 
@@ -148,20 +174,49 @@ export async function sendNotificationsForEvent(event, booking) {
           console.warn('Failed to fetch requester user for notifications', requesterId, e);
         }
       }
+    } else if (event === 'vehicle_borrowed') {
+      // For vehicle_borrowed: notify admins + the borrower
+      const adminSnaps = await db.collection('users').where('role', '==', 'admin').get();
+      recipientDocs.push(...adminSnaps.docs);
+      
+      // Add the borrower (person who borrowed the vehicle)
+      const borrowerId = fullBooking.userId || fullBooking.requesterId;
+      if (borrowerId) {
+        try {
+          const borrowerDoc = await db.collection('users').doc(borrowerId).get();
+          if (borrowerDoc.exists) recipientDocs.push(borrowerDoc);
+        } catch (e) {
+          console.warn('Failed to fetch borrower user for notifications', borrowerId, e);
+        }
+      }
+      
+      // Set templates for vehicle_borrowed using usage data
+      const usageDataBorrowed = b; // Use normalized booking data
+      console.log('vehicle_borrowed - usageData:', usageDataBorrowed);
+      templates.admin.vehicle_borrowed = vehicleBorrowedFlex(usageDataBorrowed);
+      templates.driver.vehicle_borrowed = vehicleBorrowedFlex(usageDataBorrowed);
+      templates.employee.vehicle_borrowed = vehicleBorrowedFlex(usageDataBorrowed);
     } else if (event === 'vehicle_returned') {
       // For vehicle_returned: notify admins + the returning driver
       const adminSnaps = await db.collection('users').where('role', '==', 'admin').get();
       recipientDocs.push(...adminSnaps.docs);
       
       // returning driver (if assigned)
-      if (fullBooking && fullBooking.driverId) {
+      if (fullBooking && fullBooking.userId) {
         try {
-          const drv = await db.collection('users').doc(fullBooking.driverId).get();
+          const drv = await db.collection('users').doc(fullBooking.userId).get();
           if (drv.exists) recipientDocs.push(drv);
         } catch (e) {
-          console.warn('Failed to fetch driver user for notifications', fullBooking.driverId, e);
+          console.warn('Failed to fetch user for notifications', fullBooking.userId, e);
         }
       }
+      
+      // Set templates for vehicle_returned using usage data
+      const usageDataReturned = b; // Use normalized booking data
+      console.log('vehicle_returned - usageData:', usageDataReturned);
+      templates.admin.vehicle_returned = vehicleReturnedFlex(usageDataReturned);
+      templates.driver.vehicle_returned = vehicleReturnedFlex(usageDataReturned);
+      templates.employee.vehicle_returned = vehicleReturnedFlex(usageDataReturned);
     } else if (event === 'booking_approved' || event === 'booking_rejected') {
       // For approval/rejection: notify admins + the requester
       const adminSnaps = await db.collection('users').where('role', '==', 'admin').get();

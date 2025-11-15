@@ -1,6 +1,7 @@
 // API: ส่งคืนรถ
 import { NextResponse } from 'next/server';
 import admin from '@/lib/firebaseAdmin';
+import { sendNotificationsForEvent } from '@/lib/notifications';
 
 export async function POST(request) {
   try {
@@ -60,6 +61,43 @@ export async function POST(request) {
     await usageRef.update(updateUsageData);
     const vehicleRef = admin.firestore().collection('vehicles').doc(usageData.vehicleId);
     await vehicleRef.update(updateVehicleData);
+
+    // Fetch expenses for this usage to include in notification
+    let totalExpenses = 0;
+    let expenses = [];
+    try {
+      const expensesSnap = await admin.firestore()
+        .collection('expenses')
+        .where('usageId', '==', usageId)
+        .get();
+      
+      expenses = expensesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      totalExpenses = expenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
+      console.log('Expenses for notification:', { count: expenses.length, totalExpenses });
+    } catch (expErr) {
+      console.error('Failed to fetch expenses for notification:', expErr);
+    }
+
+    // Send notification for vehicle returned
+    try {
+      const notificationData = {
+        id: usageId,
+        userId: usageData.userId,
+        userName: usageData.userName || 'ไม่ระบุชื่อ',
+        vehicleId: usageData.vehicleId,
+        vehicleLicensePlate: usageData.vehicleLicensePlate,
+        startTime: usageData.startTime,
+        endTime: updateUsageData.endTime,
+        totalDistance: totalDistance,
+        totalExpenses: totalExpenses,
+        expenses: expenses
+      };
+      console.log('Sending notification with data:', notificationData);
+      await sendNotificationsForEvent('vehicle_returned', notificationData);
+    } catch (notifErr) {
+      console.error('Failed to send vehicle returned notifications:', notifErr);
+      // Don't fail the request if notification fails
+    }
 
     return NextResponse.json({
       success: true,

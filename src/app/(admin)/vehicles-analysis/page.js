@@ -22,6 +22,10 @@ export default function VehiclesAnalysisPage() {
   });
   // ช่องกำหนด threshold
   const [threshold, setThreshold] = useState(10);
+  
+  // Pagination state for fuel records
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     const fetchVehicles = async () => {
@@ -454,21 +458,116 @@ export default function VehiclesAnalysisPage() {
                       <td colSpan="7" className="px-4 py-8 text-center text-gray-500">ไม่พบข้อมูลการเติมน้ำมันในช่วงเวลานี้</td>
                     </tr>
                   ) : (
-                    analysisData.fuelRecords.map((record) => (
-                      <tr key={record.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm text-gray-900">{formatDate(record.timestamp)}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900">{record.mileage?.toLocaleString() || '-'} กม.</td>
-                        <td className="px-4 py-3 text-sm text-gray-900">{record.distanceTraveled > 0 ? (<span className="text-teal-600 font-medium">{record.distanceTraveled.toLocaleString()} กม.</span>) : (<span className="text-gray-400">-</span>)}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900">{record.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} บาท</td>
-                        <td className="px-4 py-3 text-sm">{record.fuelEfficiency !== null ? (<span className={`font-medium ${record.fuelEfficiency > 10 ? 'text-green-600' : record.fuelEfficiency >= 7 ? 'text-yellow-600' : 'text-red-600'}`}>{record.fuelEfficiency.toFixed(2)} กม./ลิตร</span>) : (<span className="text-gray-400">-</span>)}</td>
-                        <td className="px-4 py-3 text-sm text-gray-900">{record.costPerKm !== null ? `${record.costPerKm.toFixed(2)} บาท/กม.` : '-'}</td>
-                        <td className="px-4 py-3 text-sm text-gray-500">{record.note || '-'}</td>
-                      </tr>
-                    ))
+                    (() => {
+                      const totalPages = Math.ceil(analysisData.fuelRecords.length / itemsPerPage);
+                      const startIndex = (currentPage - 1) * itemsPerPage;
+                      const endIndex = startIndex + itemsPerPage;
+                      const currentRecords = analysisData.fuelRecords.slice(startIndex, endIndex);
+                      
+                      return currentRecords.map((record) => (
+                        <tr key={record.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 text-sm text-gray-900">{formatDate(record.timestamp)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{record.mileage?.toLocaleString() || '-'} กม.</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{record.distanceTraveled > 0 ? (<span className="text-teal-600 font-medium">{record.distanceTraveled.toLocaleString()} กม.</span>) : (<span className="text-gray-400">-</span>)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{record.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} บาท</td>
+                          <td className="px-4 py-3 text-sm">{record.fuelEfficiency !== null ? (<span className={`font-medium ${record.fuelEfficiency > 10 ? 'text-green-600' : record.fuelEfficiency >= 7 ? 'text-yellow-600' : 'text-red-600'}`}>{record.fuelEfficiency.toFixed(2)} กม./ลิตร</span>) : (<span className="text-gray-400">-</span>)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{record.costPerKm !== null ? `${record.costPerKm.toFixed(2)} บาท/กม.` : '-'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-500">{record.note || '-'}</td>
+                        </tr>
+                      ));
+                    })()
                   )}
                 </tbody>
               </table>
             </div>
+            
+            {/* Pagination */}
+            {analysisData.fuelRecords.length > 0 && (
+              <div className="px-6 py-4 border-t bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-600">
+                    แสดง {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, analysisData.fuelRecords.length)} จาก {analysisData.fuelRecords.length} รายการ
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    {/* First page button */}
+                    <button
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    
+                    {/* Previous page button */}
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    
+                    {/* Page numbers (max 3 visible) */}
+                    <div className="hidden sm:flex items-center gap-1">
+                      {(() => {
+                        const totalPages = Math.ceil(analysisData.fuelRecords.length / itemsPerPage);
+                        let startPage = Math.max(1, currentPage - 1);
+                        let endPage = Math.min(totalPages, startPage + 2);
+                        
+                        if (endPage - startPage < 2) {
+                          startPage = Math.max(1, endPage - 2);
+                        }
+                        
+                        const pages = [];
+                        for (let i = startPage; i <= endPage; i++) {
+                          pages.push(
+                            <button
+                              key={i}
+                              onClick={() => setCurrentPage(i)}
+                              className={`min-w-[40px] px-3 py-2 rounded-lg border transition-colors ${
+                                currentPage === i
+                                  ? 'bg-teal-600 text-white border-teal-600'
+                                  : 'border-gray-300 hover:bg-gray-100'
+                              }`}
+                            >
+                              {i}
+                            </button>
+                          );
+                        }
+                        return pages;
+                      })()}
+                    </div>
+                    
+                    {/* Next page button */}
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(Math.ceil(analysisData.fuelRecords.length / itemsPerPage), prev + 1))}
+                      disabled={currentPage === Math.ceil(analysisData.fuelRecords.length / itemsPerPage)}
+                      className="p-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                    
+                    {/* Last page button */}
+                    <button
+                      onClick={() => setCurrentPage(Math.ceil(analysisData.fuelRecords.length / itemsPerPage))}
+                      disabled={currentPage === Math.ceil(analysisData.fuelRecords.length / itemsPerPage)}
+                      className="p-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}

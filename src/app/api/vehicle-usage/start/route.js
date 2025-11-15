@@ -1,6 +1,7 @@
 // API: เริ่มใช้งานรถ
 import { NextResponse } from 'next/server';
 import admin from '@/lib/firebaseAdmin';
+import { sendNotificationsForEvent } from '@/lib/notifications';
 
 export async function POST(request) {
   try {
@@ -61,6 +62,23 @@ export async function POST(request) {
       updateData.currentMileage = Number(startMileage);
     }
     await vehicleRef.update(updateData);
+
+    // Send notification for vehicle borrowed
+    try {
+      await sendNotificationsForEvent('vehicle_borrowed', {
+        id: usageRef.id,
+        userId,
+        userName: userName || 'ไม่ระบุชื่อ',
+        vehicleId,
+        vehicleLicensePlate: vehicleLicensePlate || vehicleData.licensePlate,
+        startTime: usageData.startTime,
+        destination: destination || '',
+        purpose: purpose || ''
+      });
+    } catch (notifErr) {
+      console.error('Failed to send vehicle borrowed notifications:', notifErr);
+      // Don't fail the request if notification fails
+    }
 
     return NextResponse.json({
       success: true,

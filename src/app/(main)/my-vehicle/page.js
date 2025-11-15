@@ -306,7 +306,7 @@ export default function MyVehiclePage() {
             {/* Return Modal */}
             {showReturnModal && (
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-2">
-                    <div className="bg-white rounded-xl shadow-lg max-w-xs w-full p-3">
+                    <div className="bg-white rounded-xl shadow-lg max-w-sm w-full p-8">
                         <h3 className="text-base font-bold text-gray-800 mb-2 text-center">ส่งคืนรถ</h3>
                         <div className="space-y-2">
                             <div>
@@ -314,7 +314,7 @@ export default function MyVehiclePage() {
                                 {expenses.length === 0 ? (
                                     <p className="text-gray-500 text-xs text-center py-1">ไม่มีรายการ</p>
                                 ) : (
-                                    <ul className="divide-y divide-gray-100 text-xs">
+                                    <ul className="divide-y divide-gray-100 text-sm">
                                         {expenses.map(expense => (
                                             <li key={expense.id} className="flex justify-between items-center py-1">
                                                 <span>{getExpenseTypeText(expense.type)}{expense.note ? ` (${expense.note})` : ''}</span>
