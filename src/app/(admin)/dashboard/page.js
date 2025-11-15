@@ -70,7 +70,9 @@ function AlertList({ title, items, type }) {
                         <span>{item.brand} {item.model} ({item.licensePlate})</span>
                         <span className={`font-semibold ${textColor}`}>
                             {type === 'fluidChange' 
-                                ? `เหลืออีก ${(10000 - item.mileageSinceLastChange).toLocaleString()} กม.`
+                                ? item.lastFluidMileage === undefined || item.lastFluidMileage === null
+                                    ? 'ยังไม่ระบุ'
+                                    : `เหลืออีก ${(10000 - item.mileageSinceLastChange).toLocaleString()} กม.`
                                 : `หมดอายุ: ${formatDate(type === 'tax' ? item.taxDueDate : item.insuranceExpireDate)}`
                             }
                         </span>
@@ -195,7 +197,7 @@ export default function AdminDashboardPage() {
                 <StatCard title="รถว่าง" value={stats.available} icon="✅" link="/vehicles" />
                 <StatCard title="กำลังใช้งาน" value={stats.inUse} icon="🚗" link="/vehicles/in-use" />
                 <StatCard title="ซ่อมบำรุง" value={stats.maintenance} icon="🔧" link="/maintenance" />
-                <StatCard title="ประวัติทั้งหมด" value={stats.totalUsage} icon="📊" link="/vehicles-analysis" />
+                <StatCard title="ประวัติทั้งหมด" value={stats.totalUsage} icon="📊" link="/trip-history" />
             </div>
 
             {/* ส่วนแจ้งเตือน */}

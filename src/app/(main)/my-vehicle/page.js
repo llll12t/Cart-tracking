@@ -168,6 +168,27 @@ export default function MyVehiclePage() {
         return expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
     };
 
+    // ลบค่าใช้จ่าย
+    const handleDeleteExpense = async (expenseId) => {
+        console.log('ลบค่าใช้จ่าย', expenseId);
+        if (!expenseId) return;
+        if (!window.confirm('ยืนยันการลบรายการนี้?')) return;
+        try {
+            const res = await fetch(`/api/expenses?id=${expenseId}`, { method: 'DELETE' });
+            console.log('API response', res);
+            const result = await res.json();
+            console.log('API result', result);
+            if (!result.success) {
+                alert(result.error || 'เกิดข้อผิดพลาดในการลบ');
+            } else {
+                setExpenses(prev => prev.filter(e => e.id !== expenseId));
+            }
+        } catch (err) {
+            console.error('ลบค่าใช้จ่าย error', err);
+            alert('เกิดข้อผิดพลาดในการลบ');
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50">
@@ -211,7 +232,7 @@ export default function MyVehiclePage() {
             <div className="px-4 py-2 -mt-16">
                 {/* Vehicle Card */}
                 <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-4">
-                    <div className="flex items-center p-2 gap-4">
+                    <div className="flex items-center p-4 gap-4">
                         {getImageUrl(vehicle) && (
                             <Image
                                 src={getImageUrl(vehicle)}
@@ -270,7 +291,7 @@ export default function MyVehiclePage() {
                         <>
                             <div className="space-y-2 mb-3">
                                 {expenses.map(expense => (
-                                    <div key={expense.id} className="flex justify-between items-center py-2 border-b border-gray-100">
+                                    <div key={expense.id} className="flex justify-between items-center py-2 border-b border-gray-100 group">
                                         <div>
                                             <div className="text-sm font-medium">{getExpenseTypeText(expense.type)}</div>
                                             {expense.note && <div className="text-xs text-gray-500">{expense.note}</div>}
@@ -278,11 +299,18 @@ export default function MyVehiclePage() {
                                                 <div className="text-xs text-gray-500">ไมล์: {expense.mileage.toLocaleString()} กม.</div>
                                             )}
                                         </div>
-                                        <div className="text-right">
+                                        <div className="flex flex-col items-end gap-1">
                                             <div className="font-medium text-teal-600">{expense.amount.toLocaleString()} ฿</div>
                                             <div className="text-xs text-gray-500">
                                                 {formatDateTime(expense.timestamp).split(' ')[1]}
                                             </div>
+                                            <button
+                                                onClick={() => handleDeleteExpense(expense.id)}
+                                                className="text-xs text-red-600 font-semibold border border-red-200 rounded px-2 py-1 mt-1 hover:bg-red-50 hover:border-red-400 transition"
+                                                title="ลบรายการนี้"
+                                            >
+                                                ลบ
+                                            </button>
                                         </div>
                                     </div>
                                 ))}
@@ -297,7 +325,7 @@ export default function MyVehiclePage() {
 
                 {/* Return Vehicle Button */}
                 <button onClick={() => setShowReturnModal(true)}
-                    className="w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-all text-sm"
+                    className="w-full py-4 bg-red-800 text-white rounded-lg font-semibold hover:bg-red-700 transition-all text-sm"
                 >
                       ส่งคืนรถ
                 </button>
@@ -335,21 +363,21 @@ export default function MyVehiclePage() {
                                 </div>
                             )}
 
-                            <div className="flex gap-2 mt-2">
+                            <div className="flex gap-4 mt-4">
                                 <button
                                     onClick={() => {
                                         setShowReturnModal(false);
                                         setReturnMessage("");
                                     }}
                                     disabled={isReturning}
-                                    className="flex-1 py-2 bg-gray-200 text-gray-700 rounded font-semibold hover:bg-gray-300 transition-all disabled:opacity-50 text-xs"
+                                    className="flex-1 py-2 bg-gray-200 text-gray-700 rounded-full font-semibold hover:bg-gray-300 transition-all disabled:opacity-50 text-sm"
                                 >
                                     ยกเลิก
                                 </button>
                                 <button
                                     onClick={handleReturnVehicle}
                                     disabled={isReturning}
-                                    className="flex-1 py-2 bg-red-600 text-white rounded font-semibold hover:bg-red-700 transition-all disabled:bg-gray-400 text-xs"
+                                    className="flex-1 py-2 bg-red-600 text-white rounded-full font-semibold hover:bg-red-700 transition-all disabled:bg-gray-400 text-sm"
                                 >
                                     {isReturning ? 'กำลังส่งคืน...' : 'ยืนยันส่งคืน'}
                                 </button>

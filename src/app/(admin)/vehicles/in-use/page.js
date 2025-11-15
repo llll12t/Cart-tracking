@@ -40,6 +40,22 @@ export default function VehiclesInUsePage() {
             const usageData = usageDoc.data();
             // set driver name from userName field in vehicle-usage
             data.driver = { name: usageData.userName };
+            data.activeUsageId = usageDoc.id;
+            
+            // fetch expenses for this usage
+            const expensesQ = query(
+              collection(db, 'expenses'),
+              where('usageId', '==', usageDoc.id),
+              orderBy('timestamp', 'desc')
+            );
+            const expensesSnap = await getDocs(expensesQ);
+            const expenses = expensesSnap.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data(),
+              timestamp: doc.data().timestamp?.toDate?.() || new Date(doc.data().timestamp)
+            }));
+            data.expenses = expenses;
+            data.totalExpenses = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
           }
         } catch (e) {
           console.error('Failed to fetch active vehicle-usage for driver', e);
@@ -111,6 +127,33 @@ export default function VehiclesInUsePage() {
               )}
 
             </div>
+
+            {/* ค่าใช้จ่ายระหว่างการใช้งาน */}
+            {v.expenses && v.expenses.length > 0 && (
+              <div className="mt-4 bg-blue-50 border border-blue-200 rounded p-3">
+                <div className="font-medium text-sm mb-2 text-blue-900">ค่าใช้จ่ายระหว่างการใช้งาน</div>
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {v.expenses.map(exp => (
+                    <div key={exp.id} className="flex justify-between items-start text-xs">
+                      <div className="flex-1">
+                        <span className="font-medium">
+                          {exp.type === 'fuel' ? '⛽ เติมน้ำมัน' : 
+                           exp.type === 'fluid' ? '🛢️ เปลี่ยนของเหลว' : 
+                           '💰 ' + (exp.title || 'อื่นๆ')}
+                        </span>
+                        {exp.note && <span className="text-gray-600 ml-1">({exp.note})</span>}
+                        {exp.mileage && <div className="text-gray-600">ไมล์: {exp.mileage.toLocaleString()} กม.</div>}
+                      </div>
+                      <span className="font-semibold text-teal-700 ml-2">{exp.amount.toLocaleString()} ฿</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 pt-2 border-t border-blue-300 flex justify-between items-center">
+                  <span className="text-sm font-semibold text-blue-900">รวมทั้งหมด:</span>
+                  <span className="text-sm font-bold text-teal-700">{v.totalExpenses.toLocaleString()} ฿</span>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>

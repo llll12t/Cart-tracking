@@ -5,7 +5,7 @@ import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 
-export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
+export default function AddFluidLogForm({ vehicleId, onClose }) {
   const { userProfile } = useAuth();
   const [formData, setFormData] = useState({
     cost: '',
@@ -15,29 +15,29 @@ export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Auto-fill mileage from latest fuel record
+  // Auto-fill mileage from latest fluid record
   useEffect(() => {
     const fetchLatestMileage = async () => {
       try {
         const { query, where, orderBy, limit, getDocs } = await import('firebase/firestore');
-        // ดึงข้อมูลเติมน้ำมันล่าสุดที่มีเลขไมล์
-        const fuelQuery = query(
+        // ดึงข้อมูลเปลี่ยนของเหลวล่าสุดที่มีเลขไมล์
+        const fluidQuery = query(
           collection(db, 'expenses'),
           where('vehicleId', '==', vehicleId),
-          where('type', '==', 'fuel'),
+          where('type', '==', 'fluid'),
           orderBy('timestamp', 'desc'),
           limit(1)
         );
-        const fuelSnap = await getDocs(fuelQuery);
-        if (!fuelSnap.empty) {
-          const latestFuel = fuelSnap.docs[0].data();
-          if (latestFuel.mileage) {
-            setFormData(f => ({ ...f, mileage: latestFuel.mileage }));
+        const fluidSnap = await getDocs(fluidQuery);
+        if (!fluidSnap.empty) {
+          const latestFluid = fluidSnap.docs[0].data();
+          if (latestFluid.mileage) {
+            setFormData(f => ({ ...f, mileage: latestFluid.mileage }));
             return;
           }
         }
         
-        // ถ้าไม่มีข้อมูลเติมน้ำมัน ให้ใช้ currentMileage จาก vehicle
+        // ถ้าไม่มีข้อมูลเปลี่ยนของเหลว ให้ใช้ currentMileage จาก vehicle
         const vRef = doc(db, 'vehicles', vehicleId);
         const snap = await getDoc(vRef);
         if (snap.exists()) {
@@ -47,7 +47,7 @@ export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
           }
         }
       } catch (err) {
-        console.error('Failed to fetch latest mileage for fuel form:', err);
+        console.error('Failed to fetch latest mileage for fluid form:', err);
       }
     };
     if (vehicleId) fetchLatestMileage();
@@ -68,7 +68,7 @@ export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
         userId: userProfile?.uid || null, // บันทึกผู้ใช้ที่เพิ่มข้อมูล
         userName: userProfile?.name || userProfile?.email || 'ไม่ระบุ', // เก็บชื่อผู้บันทึก
         usageId: null, // ไม่เกี่ยวกับ usage
-        type: 'fuel',
+        type: 'fluid',
         amount: Number(formData.cost),
         mileage: formData.mileage ? Number(formData.mileage) : null,
         note: formData.note || '',
@@ -89,7 +89,7 @@ export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="w-full max-w-lg p-8 bg-white rounded-lg shadow-2xl">
-        <h2 className="mb-6 text-2xl font-bold">⛽ เพิ่มรายการเติมน้ำมัน</h2>
+        <h2 className="mb-6 text-2xl font-bold">🛢️ เพิ่มรายการเปลี่ยนของเหลว</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block mb-1 text-sm font-medium">เลขไมล์ <span className="text-red-500">*</span></label>
@@ -103,7 +103,7 @@ export default function AddFuelLogForm({ vehicleId, currentMileage, onClose }) {
           
           <div>
             <label className="block mb-1 text-sm font-medium">หมายเหตุ (ถ้ามี)</label>
-            <input type="text" name="note" placeholder="เช่น เติมที่ปั๊ม Shell" value={formData.note} onChange={handleChange} className="w-full p-2 border rounded"/>
+            <input type="text" name="note" placeholder="เช่น เปลี่ยนน้ำมันเครื่อง" value={formData.note} onChange={handleChange} className="w-full p-2 border rounded"/>
           </div>
 
           {userProfile && (

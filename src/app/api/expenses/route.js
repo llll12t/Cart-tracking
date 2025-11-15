@@ -1,3 +1,18 @@
+// DELETE: ลบค่าใช้จ่าย
+export async function DELETE(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ error: 'Missing expense id' }, { status: 400 });
+    }
+    await admin.firestore().collection('expenses').doc(id).delete();
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting expense:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
 // API: จัดการค่าใช้จ่าย (บันทึก, ดึงข้อมูล)
 import { NextResponse } from 'next/server';
 import admin from '@/lib/firebaseAdmin';

@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import Image from 'next/image';
 import { useRouter, useParams } from "next/navigation";
 import { db, storage } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 export default function EditVehiclePage() {
   const router = useRouter();
@@ -24,12 +24,53 @@ export default function EditVehiclePage() {
     imageUrl: "",
     taxDueDate: "",
     insuranceExpireDate: "",
-    status: "available"
+    status: "active"
+  });
+  // Initial fluid setup (optional)
+  const [initFluidEnabled, setInitFluidEnabled] = useState(false);
+  const [initFluid, setInitFluid] = useState({
+    fluidType: "engine_oil",
+    date: new Date().toISOString().split('T')[0],
+    mileage: "",
+    cost: "",
+    note: "ตั้งค่าเริ่มต้น"
   });
   const [imageFile, setImageFile] = useState(null);
   const [imageBroken, setImageBroken] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [vehicleTypes, setVehicleTypes] = useState(['รถ SUV', 'รถเก๋ง', 'รถกระบะ', 'รถตู้', 'รถบรรทุก', 'มอเตอร์ไซค์', 'อื่นๆ']);
+
+  useEffect(() => {
+    async function loadVehicleTypes() {
+      try {
+        const res = await fetch('/api/notifications/settings');
+        const data = await res.json();
+        if (data.vehicleTypes && data.vehicleTypes.length > 0) {
+          setVehicleTypes(data.vehicleTypes);
+        }
+      } catch (err) {
+        console.error('Failed to load vehicle types:', err);
+      }
+    }
+    loadVehicleTypes();
+  }, []);
+
+  useEffect(() => {
+    async function loadVehicleTypes() {
+      try {
+        const res = await fetch('/api/notifications/settings');
+        const data = await res.json();
+        if (data.vehicleTypes && data.vehicleTypes.length > 0) {
+          setVehicleTypes(data.vehicleTypes);
+        }
+      } catch (err) {
+        console.error('Failed to load vehicle types:', err);
+      }
+    }
+    loadVehicleTypes();
+  }, []);
 
   useEffect(() => {
     async function fetchVehicle() {
@@ -53,6 +94,10 @@ export default function EditVehiclePage() {
           try { return new Date(d).toISOString().slice(0, 10); } catch (e) { return ""; }
         };
 
+        // normalize status to match Add page
+        const rawStatus = snap.data().status || "active";
+        const normalizedStatus = rawStatus === 'available' ? 'active' : rawStatus;
+
         setForm({
           brand: snap.data().brand || "",
           model: snap.data().model || "",
@@ -65,7 +110,7 @@ export default function EditVehiclePage() {
           imageUrl: snap.data().imageUrl || "",
           taxDueDate: toInputDate(taxField),
           insuranceExpireDate: toInputDate(insuranceField),
-          status: snap.data().status || "available"
+          status: normalizedStatus
         });
       }
       setLoading(false);
@@ -130,10 +175,28 @@ export default function EditVehiclePage() {
         color: form.color,
         note: form.note,
         imageUrl: imageUrl,
-        status: form.status || "available",
+        status: form.status || "active",
         taxDueDate: form.taxDueDate ? new Date(form.taxDueDate) : null,
         insuranceExpireDate: form.insuranceExpireDate ? new Date(form.insuranceExpireDate) : null
       });
+
+      // If initial fluid setup enabled, create a fluid expense record
+      if (initFluidEnabled) {
+        const mileageNum = initFluid.mileage ? Number(initFluid.mileage) : null;
+        const costNum = initFluid.cost ? Number(initFluid.cost) : 0;
+        await addDoc(collection(db, "expenses"), {
+          vehicleId,
+          userId: null,
+          usageId: null,
+          type: 'fluid',
+          amount: costNum,
+          mileage: mileageNum,
+          note: `${initFluid.note || 'ตั้งค่าเริ่มต้น'} (${initFluid.fluidType})`,
+          timestamp: new Date(initFluid.date),
+          createdAt: serverTimestamp(),
+          fluidType: initFluid.fluidType
+        });
+      }
       // clear selected local file after successful upload
       setImageFile(null);
       setMessage("บันทึกข้อมูลรถสำเร็จ!");
@@ -143,11 +206,42 @@ export default function EditVehiclePage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!vehicleId) return;
+    const ok = typeof window !== 'undefined' ? window.confirm('ยืนยันการลบรถคันนี้? การลบนี้ไม่สามารถย้อนกลับได้') : true;
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      // Attempt to delete image from Storage if it's a Firebase URL
+      try {
+        const imageUrl = form.imageUrl;
+        if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('http')) {
+          const imageRef = ref(storage, imageUrl);
+          await deleteObject(imageRef);
+        }
+      } catch (_) {
+        // ignore image deletion errors
+      }
+
+      await (await import('firebase/firestore')).deleteDoc(doc(db, 'vehicles', vehicleId));
+      setMessage('ลบรถสำเร็จ');
+      setTimeout(() => router.push('/vehicles'), 800);
+    } catch (e) {
+      setMessage('ลบรถไม่สำเร็จ');
+      setDeleting(false);
+    }
+  };
+
   if (loading) return <div className="p-8 text-center">กำลังโหลดข้อมูลรถ...</div>;
 
   return (
     <div className="max-w-6xl mx-auto p-8">
-      <h1 className="text-3xl font-bold mb-6">แก้ไขข้อมูลรถ</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">แก้ไขข้อมูลรถ</h1>
+        <button type="button" onClick={handleDelete} disabled={deleting} className="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">
+          {deleting ? 'กำลังลบ...' : 'ลบรถ'}
+        </button>
+      </div>
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* main form (span 2) */}
@@ -155,14 +249,10 @@ export default function EditVehiclePage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block mb-1 text-sm font-medium">สถานะรถ</label>
-                <select name="status" value={form.status} onChange={handleChange} className="w-full p-3 border rounded-md">
-                  <option value="available">พร้อมใช้งาน</option>
-                  <option value="pending">รออนุมัติ</option>
-                  <option value="in_use">กำลังใช้งาน</option>
-                  <option value="on_trip">อยู่ระหว่างเดินทาง</option>
+                <select name="status" value={form.status || 'active'} onChange={handleChange} className="w-full p-3 border rounded-md">
+                  <option value="active">พร้อมใช้งาน</option>
                   <option value="maintenance">ซ่อมบำรุง</option>
                   <option value="inactive">ไม่พร้อมใช้งาน</option>
-                  <option value="retired">ปลดระวาง</option>
                 </select>
               </div>
               <div>
@@ -188,12 +278,9 @@ export default function EditVehiclePage() {
                 <label className="block mb-1 text-sm font-medium">ประเภท</label>
                 <select name="type" value={form.type} onChange={handleChange} className="w-full p-3 border rounded-md">
                   <option value="">-- เลือกประเภท --</option>
-                  <option value="รถเก๋ง">รถเก๋ง</option>
-                  <option value="รถกระบะ">รถกระบะ</option>
-                  <option value="รถตู้">รถตู้</option>
-                  <option value="รถบรรทุก">รถบรรทุก</option>
-                  <option value="มอเตอร์ไซค์">มอเตอร์ไซค์</option>
-                  <option value="อื่นๆ">อื่นๆ</option>
+                  {vehicleTypes.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -224,6 +311,53 @@ export default function EditVehiclePage() {
                 <label className="block mb-1 text-sm font-medium">ประกันรถยนต์ (หมดอายุ)</label>
                 <input name="insuranceExpireDate" type="date" value={form.insuranceExpireDate} onChange={handleDateChange} className="w-full p-3 border rounded-md" />
               </div>
+            </div>
+
+            {/* Initial Fluid Setup - same as Add page, placed at bottom */}
+            <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+                <div>
+                  <h3 className="font-semibold">ตั้งค่าของเหลวเริ่มต้น</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">บันทึกรายการเปลี่ยนของเหลวล่าสุด เพื่อใช้เป็นจุดเริ่มต้นการติดตาม</p>
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm select-none">
+                  <input type="checkbox" className="h-4 w-4" checked={initFluidEnabled} onChange={(e) => setInitFluidEnabled(e.target.checked)} />
+                  เปิดใช้งาน
+                </label>
+              </div>
+              {initFluidEnabled && (
+                <div className="px-4 py-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block mb-1 text-sm font-medium">ชนิดของเหลว</label>
+                    <select value={initFluid.fluidType} onChange={(e)=>setInitFluid(v=>({...v, fluidType:e.target.value}))} className="w-full p-3 border rounded-md bg-white">
+                      <option value="engine_oil">น้ำมันเครื่อง</option>
+                      <option value="coolant">น้ำยาหม้อน้ำ</option>
+                      <option value="brake_fluid">น้ำมันเบรก</option>
+                      <option value="transmission_fluid">น้ำมันเกียร์</option>
+                      <option value="power_steering">เพาเวอร์พวงมาลัย</option>
+                      <option value="differential">ดิฟเฟอเรนเชียล</option>
+                      <option value="other">อื่นๆ</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block mb-1 text-sm font-medium">วันที่ (เปลี่ยนล่าสุด)</label>
+                    <input type="date" value={initFluid.date} onChange={(e)=>setInitFluid(v=>({...v, date:e.target.value}))} className="w-full p-3 border rounded-md bg-white" />
+                  </div>
+                  <div>
+                    <label className="block mb-1 text-sm font-medium">เลขไมล์ขณะเปลี่ยน</label>
+                    <input type="number" value={initFluid.mileage} onChange={(e)=>setInitFluid(v=>({...v, mileage:e.target.value}))} placeholder="เช่น 10500" className="w-full p-3 border rounded-md bg-white" />
+                    <p className="text-xs text-gray-500 mt-1">ใช้เป็นจุดเริ่มต้นการติดตาม</p>
+                  </div>
+                  <div>
+                    <label className="block mb-1 text-sm font-medium">ค่าใช้จ่าย (ถ้ามี)</label>
+                    <input type="number" step="0.01" value={initFluid.cost} onChange={(e)=>setInitFluid(v=>({...v, cost:e.target.value}))} placeholder="0.00" className="w-full p-3 border rounded-md bg-white" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block mb-1 text-sm font-medium">หมายเหตุ</label>
+                    <input type="text" value={initFluid.note} onChange={(e)=>setInitFluid(v=>({...v, note:e.target.value}))} placeholder="ตั้งค่าเริ่มต้น" className="w-full p-3 border rounded-md bg-white" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

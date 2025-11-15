@@ -79,21 +79,30 @@ export default function AddUserPage() {
   };
 
   return (
-    <div>
+    <div className="max-w-5xl mx-auto space-y-6">
+      <h1 className="text-2xl font-bold text-gray-900">เพิ่มพนักงานใหม่</h1>
 
-      <div className="max-w-5xl mx-auto p-8 bg-white rounded-lg shadow-md">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">เพิ่มผู้ใช้งานใหม่</h1>
+      <div className="bg-white rounded-xl shadow-sm p-6">
 
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Left: avatar */}
+          {/* Left: avatar (clickable image to change) */}
           <div className="flex flex-col items-center">
             <label className="block mb-1 text-sm font-medium">รูปโปรไฟล์</label>
-            {imagePreview ? (
-              <Image src={imagePreview} alt="avatar" width={128} height={128} className="w-32 h-32 object-cover rounded-full border" />
-            ) : (
-              <div className="w-32 h-32 bg-gray-200 flex items-center justify-center rounded-full border text-gray-400 text-xs">ไม่มีรูป</div>
-            )}
-            <input type="file" accept="image/*" onChange={handleImageChange} className="w-full mt-4" />
+            <label htmlFor="avatar-upload" className="cursor-pointer group">
+              {imagePreview ? (
+                <Image src={imagePreview} alt="avatar" width={128} height={128} className="w-32 h-32 object-cover rounded-full border group-hover:opacity-80 transition" />
+              ) : (
+                <div className="w-32 h-32 bg-gray-200 flex items-center justify-center rounded-lg border text-gray-400 text-xs group-hover:opacity-80 transition">ไม่มีรูป</div>
+              )}
+              <div className="absolute mt-[-36px] ml-[80px] bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition pointer-events-none select-none">เปลี่ยนรูป</div>
+            </label>
+            <input
+              id="avatar-upload"
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="hidden"
+            />
           </div>
 
           <div className="md:col-span-2">
@@ -111,11 +120,11 @@ export default function AddUserPage() {
                 <input type="password" name="password" placeholder="อย่างน้อย 6 ตัวอักษร" value={formData.password} onChange={handleChange} required className="w-full p-2 border border-gray-300 rounded-md"/>
               </div>
               <div>
-                <label className="block mb-1 text-sm font-medium text-gray-700">บทบาท (Role)</label>
+                <label className="block mb-1 text-sm font-medium text-gray-700">บทบาท</label>
                 <select name="role" value={formData.role} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md">
-                  <option value="employee">พนักงาน (Employee)</option>
-                  <option value="driver">คนขับรถ (Driver)</option>
-                  <option value="admin">ผู้ดูแลระบบ (Admin)</option>
+                  <option value="employee">พนักงาน</option>
+                  <option value="driver">พนักงานขับ</option>
+                  <option value="admin">ผู้ดูแลระบบ</option>
                 </select>
               </div>
 
@@ -137,9 +146,9 @@ export default function AddUserPage() {
             </div>
 
             <div className="flex gap-4 justify-end mt-6">
-              <button type="button" onClick={() => router.back()} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
-              <button type="submit" disabled={isLoading} className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-400">
-                {isLoading ? 'กำลังสร้าง...' : 'สร้างผู้ใช้'}
+              <button type="button" onClick={() => router.back()} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all">ยกเลิก</button>
+              <button type="submit" disabled={isLoading} className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:bg-gray-400 transition-all">
+                {isLoading ? 'กำลังสร้าง...' : 'สร้างพนักงาน'}
               </button>
             </div>
           </div>

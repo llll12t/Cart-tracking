@@ -54,7 +54,7 @@ export default function MainHeader({ userProfile, activeTab, setActiveTab }) {
             router.push('/my-vehicle');
             if (typeof setActiveTab === 'function') setActiveTab('vehicle');
           }}
-          className={`flex-1 py-3 rounded-full font-semibold transition-all shadow-sm border-0 focus:outline-none ${
+          className={`flex-1 py-3 rounded-lg font-semibold transition-all shadow-sm border-0 focus:outline-none ${
             activeTab === 'vehicle'
               ? 'bg-teal-900 text-white ring-2 ring-teal-200/20'
               : 'bg-teal-500/40 text-teal-100 hover:bg-teal-500/70'
@@ -67,7 +67,7 @@ export default function MainHeader({ userProfile, activeTab, setActiveTab }) {
             router.push('/my-trips');
             if (typeof setActiveTab === 'function') setActiveTab('trips');
           }}
-          className={`flex-1 py-3 rounded-full font-semibold transition-all shadow-sm border-0 focus:outline-none ${
+          className={`flex-1 py-3 rounded-lg font-semibold transition-all shadow-sm border-0 focus:outline-none ${
             activeTab === 'trips'
               ? 'bg-teal-900 text-white ring-2 ring-teal-200/20'
               : 'bg-teal-500/40 text-teal-100 hover:bg-teal-500/70'

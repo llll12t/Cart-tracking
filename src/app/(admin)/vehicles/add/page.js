@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from 'next/image';
 import { useRouter } from "next/navigation";
 import { db, storage } from "@/lib/firebase";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export default function AddVehiclePage() {
@@ -15,19 +15,44 @@ export default function AddVehiclePage() {
     licensePlate: "",
     currentMileage: "",
     year: "",
-    type: "รถเก๋ง",
+    type: "",
     color: "",
     note: "",
     imageUrl: "",
     taxDueDate: "",
     insuranceExpireDate: "",
-    status: "active"
+    status: "available"
+  });
+  // Initial fluid setup
+  const [initFluidEnabled, setInitFluidEnabled] = useState(false);
+  const [initFluid, setInitFluid] = useState({
+    fluidType: "engine_oil",
+    date: new Date().toISOString().split('T')[0],
+    mileage: "",
+    cost: "",
+    note: ""
   });
   const [imageFile, setImageFile] = useState(null);
   const [imageBroken, setImageBroken] = useState(false);
   const [message, setMessage] = useState("");
   const [imageUrlInput, setImageUrlInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [vehicleTypes, setVehicleTypes] = useState(['รถ SUV', 'รถเก๋ง', 'รถกระบะ', 'รถตู้', 'รถบรรทุก', 'มอเตอร์ไซค์', 'อื่นๆ']);
+
+  useEffect(() => {
+    async function loadVehicleTypes() {
+      try {
+        const res = await fetch('/api/notifications/settings');
+        const data = await res.json();
+        if (data.vehicleTypes && data.vehicleTypes.length > 0) {
+          setVehicleTypes(data.vehicleTypes);
+        }
+      } catch (err) {
+        console.error('Failed to load vehicle types:', err);
+      }
+    }
+    loadVehicleTypes();
+  }, []);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -68,7 +93,7 @@ export default function AddVehiclePage() {
         const snapshot = await uploadBytes(storageRef, imageFile);
         imageUrl = await getDownloadURL(snapshot.ref);
       }
-      await addDoc(collection(db, "vehicles"), {
+      const vehicleDoc = await addDoc(collection(db, "vehicles"), {
         brand: form.brand,
         model: form.model,
         licensePlate: form.licensePlate,
@@ -78,10 +103,28 @@ export default function AddVehiclePage() {
         color: form.color,
         note: form.note,
         imageUrl: imageUrl,
-        status: form.status || "active",
+        status: form.status || "available",
         taxDueDate: form.taxDueDate ? new Date(form.taxDueDate) : null,
         insuranceExpireDate: form.insuranceExpireDate ? new Date(form.insuranceExpireDate) : null
       });
+
+      // If initial fluid setup enabled, create an initial fluid expense entry
+      if (initFluidEnabled) {
+        const mileageNum = initFluid.mileage ? Number(initFluid.mileage) : null;
+        const costNum = initFluid.cost ? Number(initFluid.cost) : 0;
+        await addDoc(collection(db, "expenses"), {
+          vehicleId: vehicleDoc.id,
+          userId: null,
+          usageId: null,
+          type: 'fluid',
+          amount: costNum,
+          mileage: mileageNum,
+          note: `${initFluid.note || 'ตั้งค่าเริ่มต้น'})`,
+          timestamp: new Date(initFluid.date),
+          createdAt: serverTimestamp(),
+          fluidType: initFluid.fluidType
+        });
+      }
       setMessage("เพิ่มรถสำเร็จ!");
       setTimeout(() => router.push(`/vehicles`), 1200);
     } catch (err) {
@@ -128,12 +171,10 @@ export default function AddVehiclePage() {
               <div>
                 <label className="block mb-1 text-sm font-medium">ประเภท</label>
                 <select name="type" value={form.type} onChange={handleChange} className="w-full p-3 border rounded-md">
-                  <option value="รถเก๋ง">รถเก๋ง</option>
-                  <option value="รถกระบะ">รถกระบะ</option>
-                  <option value="รถตู้">รถตู้</option>
-                  <option value="รถบรรทุก">รถบรรทุก</option>
-                  <option value="มอเตอร์ไซค์">มอเตอร์ไซค์</option>
-                  <option value="อื่นๆ">อื่นๆ</option>
+                  <option value="">-- เลือกประเภท --</option>
+                  {vehicleTypes.map((type) => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -164,6 +205,53 @@ export default function AddVehiclePage() {
                 <label className="block mb-1 text-sm font-medium">ประกันรถยนต์ (หมดอายุ)</label>
                 <input name="insuranceExpireDate" type="date" value={form.insuranceExpireDate} onChange={handleDateChange} className="w-full p-3 border rounded-md" />
               </div>
+            </div>
+
+            {/* Initial Fluid Setup - moved to bottom, compact UI */}
+            <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+                <div>
+                  <h3 className="font-semibold">ตั้งค่าของเหลวเริ่มต้น</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">บันทึกรายการเปลี่ยนของเหลวล่าสุด เพื่อใช้เป็นจุดเริ่มต้นการติดตาม</p>
+                </div>
+                <label className="inline-flex items-center gap-2 text-sm select-none">
+                  <input type="checkbox" className="h-4 w-4" checked={initFluidEnabled} onChange={(e) => setInitFluidEnabled(e.target.checked)} />
+                  เปิดใช้งาน
+                </label>
+              </div>
+              {initFluidEnabled && (
+                <div className="px-4 py-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block mb-1 text-sm font-medium">ชนิดของเหลว</label>
+                    <select value={initFluid.fluidType} onChange={(e)=>setInitFluid(v=>({...v, fluidType:e.target.value}))} className="w-full p-3 border rounded-md bg-white">
+                      <option value="engine_oil">น้ำมันเครื่อง</option>
+                      <option value="coolant">น้ำยาหม้อน้ำ</option>
+                      <option value="brake_fluid">น้ำมันเบรก</option>
+                      <option value="transmission_fluid">น้ำมันเกียร์</option>
+                      <option value="power_steering">เพาเวอร์พวงมาลัย</option>
+                      <option value="differential">ดิฟเฟอเรนเชียล</option>
+                      <option value="other">อื่นๆ</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block mb-1 text-sm font-medium">วันที่ (เปลี่ยนล่าสุด)</label>
+                    <input type="date" value={initFluid.date} onChange={(e)=>setInitFluid(v=>({...v, date:e.target.value}))} className="w-full p-3 border rounded-md bg-white" />
+                  </div>
+                  <div>
+                    <label className="block mb-1 text-sm font-medium">เลขไมล์ขณะเปลี่ยน</label>
+                    <input type="number" value={initFluid.mileage} onChange={(e)=>setInitFluid(v=>({...v, mileage:e.target.value}))} placeholder="เช่น 10500" className="w-full p-3 border rounded-md bg-white" />
+                    <p className="text-xs text-gray-500 mt-1">ใช้เป็นจุดเริ่มต้นการติดตาม</p>
+                  </div>
+                  <div>
+                    <label className="block mb-1 text-sm font-medium">ค่าใช้จ่าย (ถ้ามี)</label>
+                    <input type="number" step="0.01" value={initFluid.cost} onChange={(e)=>setInitFluid(v=>({...v, cost:e.target.value}))} placeholder="0.00" className="w-full p-3 border rounded-md bg-white" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block mb-1 text-sm font-medium">หมายเหตุ</label>
+                    <input type="text" value={initFluid.note} onChange={(e)=>setInitFluid(v=>({...v, note:e.target.value}))} placeholder="ตั้งค่าเริ่มต้น" className="w-full p-3 border rounded-md bg-white" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

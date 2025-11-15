@@ -24,7 +24,9 @@ function FuelRecord({ record }) {
     const pricePerLiter = record.liters > 0 ? (record.cost / record.liters) : 0;
 
     // แสดง badge แหล่งที่มา
-    const sourceBadge = record.source === 'expenses' ? (
+    const sourceBadge = record.source === 'admin' ? (
+        <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">บันทึกจากพนักงาน</span>
+    ) : record.usageId ? (
         <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">จากทริป</span>
     ) : null;
 
@@ -82,6 +84,7 @@ export default function FuelPage() {
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [lastMileage, setLastMileage] = useState(null);
+    const [isReloading, setIsReloading] = useState(false);
     
     // Pagination and Filter states
     const [currentPage, setCurrentPage] = useState(1);
@@ -109,35 +112,34 @@ export default function FuelPage() {
             setFuelLogs(logsData);
         });
 
-        // ดึง expenses ที่ type='fuel' และ vehicleId ตรง
-        const fetchFuelExpenses = async () => {
-            try {
-                const expensesSnap = await (await import('firebase/firestore')).getDocs(
-                    query(collection(db, 'expenses'), where('vehicleId', '==', vehicleId), where('type', '==', 'fuel'))
-                );
-                const fuelExps = expensesSnap.docs.map(d => ({
-                    id: d.id,
-                    ...d.data(),
-                    source: 'expenses'
-                }));
-                setFuelExpenses(fuelExps);
-            } catch (e) {
-                console.error('Error fetching fuel expenses:', e);
-            }
+        // ดึง expenses ที่ type='fuel' และ vehicleId ตรง (real-time)
+        const expensesQuery = query(
+            collection(db, 'expenses'),
+            where('vehicleId', '==', vehicleId),
+            where('type', '==', 'fuel'),
+            orderBy('timestamp', 'desc')
+        );
+        const unsubscribeExpenses = onSnapshot(expensesQuery, (expensesSnap) => {
+            const fuelExps = expensesSnap.docs.map(d => ({ id: d.id, ...d.data(), source: 'expenses' }));
+            setFuelExpenses(fuelExps);
             setLoading(false);
+        }, (e) => {
+            console.error('Error listening fuel expenses:', e);
+            setLoading(false);
+        });
+
+        return () => {
+            unsubscribe();
+            unsubscribeExpenses();
         };
-
-        fetchFuelExpenses();
-
-        return () => unsubscribe();
     }, [vehicleId]);
 
     // รวมข้อมูลจาก fuel_logs และ expenses
     const allFuelRecords = [
         ...fuelLogs,
         ...fuelExpenses.map(exp => {
-            let date = exp.bookingData?.startDateTime;
-            if (!date) date = exp.createdAt || exp.date;
+            let date = exp.timestamp || exp.bookingData?.startDateTime || exp.createdAt || exp.date;
+            // Support Firestore Timestamp and ISO/string
             if (date && typeof date === 'string') date = new Date(date);
             return {
                 id: exp.id,
@@ -145,7 +147,8 @@ export default function FuelPage() {
                 cost: exp.amount || 0,
                 source: 'expenses',
                 note: exp.note || '',
-                mileage: exp.mileage || null
+                mileage: exp.mileage || null,
+                userId: exp.userId || null
             };
         })
     ].sort((a, b) => {
@@ -249,7 +252,7 @@ export default function FuelPage() {
                             <Image src={vehicle.imageUrl} alt={`${vehicle.brand} ${vehicle.model}`} width={96} height={64} className="object-cover rounded-md shadow" unoptimized />
                         )}
                         <div>
-                            <h1 className="text-3xl font-bold">ประวัติการเติมน้ำมัน</h1>
+                            <h1 className="text-3xl font-bold">⛽ ประวัติการเติมน้ำมัน</h1>
                             <p className="text-xl text-gray-600">{vehicle.brand} {vehicle.model} ({vehicle.licensePlate})</p>
                             {lastMileage && (
                                 <p className="text-md text-blue-700 font-semibold mt-2">เลขไมล์ล่าสุดที่เติมน้ำมัน: {lastMileage.toLocaleString()} กม.</p>
@@ -257,7 +260,7 @@ export default function FuelPage() {
                         </div>
                     </div>
                     <button onClick={() => setShowForm(true)} className="px-4 py-2 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700">
-                        + เพิ่มรายการ
+                        + เพิ่มรายการเติมน้ำมัน
                     </button>
                 </div>
             )}
@@ -466,15 +469,23 @@ export default function FuelPage() {
                     </div>
                 )}
             </div>
-            {showForm && <AddFuelLogForm vehicleId={vehicleId} onClose={() => {
+            {showForm && <AddFuelLogForm vehicleId={vehicleId} onClose={(success) => {
                 setShowForm(false);
-                // reload fuel logs & expenses after add
-                setLoading(true);
-                // refetch fuel logs and expenses
-                setTimeout(() => {
-                    window.location.reload();
-                }, 500);
+                if (success) {
+                    setIsReloading(true);
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 300);
+                }
             }} />}
+            {isReloading && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
+                    <div className="text-center">
+                        <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-white"></div>
+                        <p className="mt-4 text-white text-lg font-semibold">กำลังโหลดข้อมูล...</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

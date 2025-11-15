@@ -128,14 +128,12 @@ export default function ExpenseLogPage() {
           const numbers = text.match(/\d+/g);
           
           if (numbers && numbers.length > 0) {
-            // กรองเฉพาะเลข 5 หลักขึ้นไป
-            const validNumbers = numbers
-              .map(n => parseInt(n))
-              .filter(n => n >= 10000 && n <= 9999999);
+            // หาเลขที่ใหญ่ที่สุด
+            const sortedNumbers = numbers.map(n => parseInt(n)).sort((a, b) => b - a);
+            const mileageValue = sortedNumbers[0];
             
-            if (validNumbers.length > 0) {
-              // หาเลขที่ใหญ่ที่สุด
-              const mileageValue = Math.max(...validNumbers);
+            // ตรวจสอบว่าเป็นเลขไมล์ที่สมเหตุสมผล (มากกว่า 100 และไม่เกิน 9,999,999)
+            if (mileageValue >= 100 && mileageValue <= 9999999) {
               const minValue = lastFuelMileage || activeUsage?.startMileage || 0;
               
               if (mileageValue >= minValue) {

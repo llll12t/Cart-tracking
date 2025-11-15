@@ -114,19 +114,28 @@ export default function EditUserPage() {
 	if (loading) return <div className="p-8 text-center">กำลังโหลดข้อมูลผู้ใช้...</div>;
 
 	return (
-		<div className="max-w-5xl mx-auto p-8">
-			<h1 className="text-2xl font-bold mb-6">แก้ไขข้อมูลผู้ใช้</h1>
+		<div className="max-w-5xl mx-auto space-y-6">
+			<h1 className="text-2xl font-bold text-gray-900">แก้ไขข้อมูลพนักงาน</h1>
 
-			<form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-6 rounded-lg shadow">
-				{/* Left: avatar */}
+			<form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-white p-6 rounded-xl shadow-sm">
+				{/* Left: avatar (clickable image to change) */}
 				<div className="flex flex-col items-center gap-4 md:items-center md:justify-start">
 					<label className="block mb-1 text-sm font-medium">รูปโปรไฟล์</label>
-					{form.imageUrl ? (
-						<Image src={form.imageUrl} alt="User" width={128} height={128} className="w-32 h-32 object-cover rounded-full border" />
-					) : (
-						<div className="w-32 h-32 bg-gray-200 flex items-center justify-center rounded-full border text-gray-400 text-xs">ไม่มีรูป</div>
-					)}
-					<input type="file" accept="image/*" onChange={handleImageChange} className="w-full mt-2" />
+					<label htmlFor="avatar-upload" className="cursor-pointer group">
+						{form.imageUrl ? (
+							<Image src={form.imageUrl} alt="User" width={128} height={128} className="w-32 h-32 object-cover rounded-md border group-hover:opacity-80 transition" />
+						) : (
+							<div className="w-32 h-32 bg-gray-200 flex items-center justify-center rounded-md border text-gray-400 text-xs group-hover:opacity-80 transition">ไม่มีรูป</div>
+						)}
+						<div className="absolute mt-[-36px] ml-[80px] bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition pointer-events-none select-none">เปลี่ยนรูป</div>
+					</label>
+					<input
+						id="avatar-upload"
+						type="file"
+						accept="image/*"
+						onChange={handleImageChange}
+						className="hidden"
+					/>
 				</div>
 
 				{/* Right: fields span two columns on md */}
@@ -168,9 +177,9 @@ export default function EditUserPage() {
 					{message && <p className="text-left text-sm text-teal-700 mt-4">{message}</p>}
 
 					<div className="flex gap-4 justify-end mt-6">
-						<button type="button" onClick={handleSendReset} className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">ส่งอีเมลรีเซ็ตรหัสผ่าน</button>
-						<button type="button" onClick={() => router.back()} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
-						<button type="submit" className="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700">บันทึก</button>
+						<button type="button" onClick={handleSendReset} className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-all">ส่งอีเมลรีเซ็ตรหัสผ่าน</button>
+						<button type="button" onClick={() => router.back()} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all">ยกเลิก</button>
+						<button type="submit" className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all">บันทึก</button>
 					</div>
 				</div>
 			</form>

@@ -9,6 +9,12 @@ const DEFAULTS = {
     driver: { booking_created: true, booking_approved: true, vehicle_returned: true },
     employee: { booking_created: true, vehicle_returned: true }
   }
+  ,
+  vehicleTypes: ['รถ SUV', 'รถเก๋ง', 'รถกระบะ', 'รถตู้', 'รถบรรทุก', 'มอเตอร์ไซค์', 'อื่นๆ'],
+  usageLimits: {
+    storageMB: 512,
+    firestoreDocs: 10000
+  }
 };
 
 export async function GET() {

@@ -4,12 +4,15 @@ import { useParams } from "next/navigation";
 import { db } from '@/lib/firebase';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import Image from 'next/image';
+import AddFluidLogForm from '@/components/admin/AddFluidLogForm';
 
 export default function FluidHistoryPage() {
     const { vehicleId } = useParams();
     const [vehicle, setVehicle] = useState(null);
     const [fluidLogs, setFluidLogs] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [showForm, setShowForm] = useState(false);
+    const [isReloading, setIsReloading] = useState(false);
 
     useEffect(() => {
         if (!vehicleId) return;
@@ -60,7 +63,9 @@ export default function FluidHistoryPage() {
         const formatCurrency = (number) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(number);
         
         // แสดง badge แหล่งที่มา
-        const sourceBadge = record.source === 'expenses' ? (
+        const sourceBadge = record.source === 'admin' ? (
+            <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">บันทึกจากพนักงาน</span>
+        ) : record.usageId ? (
             <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">จากทริป</span>
         ) : null;
 
@@ -134,6 +139,9 @@ export default function FluidHistoryPage() {
                             )}
                         </div>
                     </div>
+                    <button onClick={() => setShowForm(true)} className="px-4 py-2 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700">
+                        + เพิ่มรายการเปลี่ยนของเหลว
+                    </button>
                 </div>
             )}
             <div className="space-y-4">
@@ -166,6 +174,23 @@ export default function FluidHistoryPage() {
                     </table>
                 </div>
             </div>
+            {showForm && <AddFluidLogForm vehicleId={vehicleId} onClose={(success) => {
+                setShowForm(false);
+                if (success) {
+                    setIsReloading(true);
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 300);
+                }
+            }} />}
+            {isReloading && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
+                    <div className="text-center">
+                        <div className="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-white"></div>
+                        <p className="mt-4 text-white text-lg font-semibold">กำลังโหลดข้อมูล...</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
