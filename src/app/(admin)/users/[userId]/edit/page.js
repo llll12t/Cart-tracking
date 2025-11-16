@@ -4,8 +4,9 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter, useParams } from "next/navigation";
-import { db } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { auth } from '@/lib/firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 
@@ -66,8 +67,20 @@ export default function EditUserPage() {
 	const handleSubmit = async (e) => {
 		e.preventDefault();
 		setMessage("");
+		setLoading(true);
 		try {
 			let imageUrl = form.imageUrl;
+			
+			// อัพโหลดรูปใหม่ถ้ามี
+			if (imageFile) {
+				const timestamp = Date.now();
+				const fileName = `users/${userId}_${timestamp}`;
+				const storageRef = ref(storage, fileName);
+				
+				await uploadBytes(storageRef, imageFile);
+				imageUrl = await getDownloadURL(storageRef);
+			}
+			
 			// normalize phone
 			let phoneToSave = form.phone || null;
 			if (phoneToSave) {
@@ -91,9 +104,12 @@ export default function EditUserPage() {
 				imageUrl: imageUrl
 			});
 			setMessage("บันทึกข้อมูลผู้ใช้สำเร็จ!");
+			setLoading(false);
 			setTimeout(() => router.push("/users"), 1200);
 		} catch (err) {
+			console.error(err);
 			setMessage("เกิดข้อผิดพลาดในการบันทึก");
+			setLoading(false);
 		}
 	};
 
@@ -121,13 +137,20 @@ export default function EditUserPage() {
 				{/* Left: avatar (clickable image to change) */}
 				<div className="flex flex-col items-center gap-4 md:items-center md:justify-start">
 					<label className="block mb-1 text-sm font-medium">รูปโปรไฟล์</label>
-					<label htmlFor="avatar-upload" className="cursor-pointer group">
+					<label htmlFor="avatar-upload" className="cursor-pointer group relative">
 						{form.imageUrl ? (
-							<Image src={form.imageUrl} alt="User" width={128} height={128} className="w-32 h-32 object-cover rounded-md border group-hover:opacity-80 transition" />
+							<Image 
+								src={form.imageUrl} 
+								alt="User" 
+								width={128} 
+								height={128} 
+								className="w-32 h-32 object-cover rounded-md border group-hover:opacity-80 transition"
+								unoptimized
+							/>
 						) : (
 							<div className="w-32 h-32 bg-gray-200 flex items-center justify-center rounded-md border text-gray-400 text-xs group-hover:opacity-80 transition">ไม่มีรูป</div>
 						)}
-						<div className="absolute mt-[-36px] ml-[80px] bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition pointer-events-none select-none">เปลี่ยนรูป</div>
+						<div className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition pointer-events-none select-none whitespace-nowrap">เปลี่ยนรูป</div>
 					</label>
 					<input
 						id="avatar-upload"
@@ -179,7 +202,9 @@ export default function EditUserPage() {
 					<div className="flex gap-4 justify-end mt-6">
 						<button type="button" onClick={handleSendReset} className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-all">ส่งอีเมลรีเซ็ตรหัสผ่าน</button>
 						<button type="button" onClick={() => router.back()} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all">ยกเลิก</button>
-						<button type="submit" className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all">บันทึก</button>
+						<button type="submit" disabled={loading} className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed">
+							{loading ? 'กำลังบันทึก...' : 'บันทึก'}
+						</button>
 					</div>
 				</div>
 			</form>

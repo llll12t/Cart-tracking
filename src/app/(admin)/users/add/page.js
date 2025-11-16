@@ -12,6 +12,7 @@ export default function AddUserPage() {
     role: 'employee',
     lineId: '',
     phone: '',
+    position: '',
   });
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
@@ -119,6 +120,11 @@ export default function AddUserPage() {
                 <label className="block mb-1 text-sm font-medium text-gray-700">รหัสผ่าน</label>
                 <input type="password" name="password" placeholder="อย่างน้อย 6 ตัวอักษร" value={formData.password} onChange={handleChange} required className="w-full p-2 border border-gray-300 rounded-md"/>
               </div>
+
+                     <div>
+                <label className="block mb-1 text-sm font-medium text-gray-700">ตำแหน่ง</label>
+                <input type="text" name="position" placeholder="ตำแหน่งงาน" value={formData.position} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md"/>
+              </div>
               <div>
                 <label className="block mb-1 text-sm font-medium text-gray-700">บทบาท</label>
                 <select name="role" value={formData.role} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md">
@@ -137,6 +143,8 @@ export default function AddUserPage() {
                 <label className="block mb-1 text-sm font-medium text-gray-700">เบอร์โทร (10 หลัก)</label>
                 <input type="text" name="phone" placeholder="0812345678" value={formData.phone} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-md"/>
               </div>
+
+       
 
               <div className="md:col-span-2">
                 {message && (

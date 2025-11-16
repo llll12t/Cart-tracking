@@ -24,7 +24,14 @@ function UserCard({ user, onDelete }) {
       {/* avatar */}
       <div className="flex-shrink-0">
         {user.imageUrl ? (
-          <Image src={user.imageUrl} alt={user.name} width={56} height={56} className="rounded-full object-cover border" unoptimized />
+          <Image 
+            src={user.imageUrl} 
+            alt={user.name} 
+            width={56} 
+            height={56} 
+            className="w-14 h-14 rounded-full object-cover border" 
+            unoptimized 
+          />
         ) : (
           <div className="w-14 h-14 rounded-full bg-teal-600 text-white flex items-center justify-center font-semibold">{(user.name || user.email || 'U')[0]}</div>
         )}

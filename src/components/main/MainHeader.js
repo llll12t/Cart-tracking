@@ -41,7 +41,7 @@ export default function MainHeader({ userProfile, activeTab, setActiveTab }) {
           </div>
           <div className="text-white">
             <p className="font-semibold text-lg">{userProfile?.name || 'นายทดสอบการ'}</p>
-            <p className="text-sm text-teal-100">พนักงาน ขับ</p>
+            <p className="text-sm text-teal-100">{userProfile?.position || 'พนักงาน'}</p>
           </div>
         </div>
 

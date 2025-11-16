@@ -43,7 +43,7 @@ export default function MyVehiclePage() {
                 if (result.success && result.usage) {
                     setActiveUsage(result.usage);
                     setEndMileage(result.usage.startMileage?.toString() || "");
-                    
+
                     // โหลด vehicle และ expenses พร้อมกัน
                     if (result.usage.vehicleId) {
                         // 1. Fetch vehicle details (realtime)
@@ -72,7 +72,7 @@ export default function MyVehiclePage() {
                         } catch (error) {
                             console.error("Error fetching expenses:", error);
                         }
-                        
+
                         setLoading(false);
                     } else {
                         setLoading(false);
@@ -356,7 +356,7 @@ export default function MyVehiclePage() {
                 <button onClick={() => setShowReturnModal(true)}
                     className="w-full py-4 bg-red-700 text-white rounded-lg font-semibold hover:bg-red-700 transition-all text-sm"
                 >
-                      ส่งคืนรถ
+                    ส่งคืนรถ
                 </button>
             </div>
 

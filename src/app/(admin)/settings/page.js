@@ -33,7 +33,6 @@ export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-50 py-8 flex justify-center items-start">
       <div className="w-full container px-2 md:px-0">
-        <h1 className="text-3xl font-extrabold text-gray-800 mb-8 text-center tracking-tight ">การตั้งค่า</h1>
         <div className="bg-white/90 p-8 rounded border border-blue-100">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {/* left column: Notifications */}

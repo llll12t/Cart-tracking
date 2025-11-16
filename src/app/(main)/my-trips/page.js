@@ -143,6 +143,7 @@ export default function MyTripsPage() {
     const [usageHistory, setUsageHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('trips');
+    const [displayCount, setDisplayCount] = useState(5);
     const router = useRouter();
 
     useEffect(() => {
@@ -181,6 +182,13 @@ export default function MyTripsPage() {
         return () => { ignore = true; };
     }, [user]);
 
+    const loadMore = () => {
+        setDisplayCount(prev => prev + 10);
+    };
+
+    const displayedHistory = usageHistory.slice(0, displayCount);
+    const hasMore = displayCount < usageHistory.length;
+
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50">
@@ -201,10 +209,23 @@ export default function MyTripsPage() {
             <div className="bg-white px-6 py-2 -mt-16">
 
                 {usageHistory.length > 0 ? (
-                    <div className="space-y-4 pb-8">
-                        {usageHistory.map(usage => (
-                            <UsageHistoryCard key={usage.id} usage={usage} />
-                        ))}
+                    <div className="pb-8">
+                        <div className="space-y-4 mb-4">
+                            {displayedHistory.map(usage => (
+                                <UsageHistoryCard key={usage.id} usage={usage} />
+                            ))}
+                        </div>
+                        
+                        {hasMore && (
+                            <div className="text-center">
+                                <button
+                                    onClick={loadMore}
+                                    className="px-6 py-3  text-teal-600 rounded-full text-sm font-semibold hover:bg-teal-700 transition-all"
+                                >
+                                    โหลดเพิ่ม ({usageHistory.length - displayCount} รายการ)
+                                </button>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="bg-white rounded-xl shadow-sm p-8 text-center">
