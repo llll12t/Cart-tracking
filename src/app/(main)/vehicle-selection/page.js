@@ -120,7 +120,7 @@ export default function VehicleSelectionPage() {
       </div>
 
       {/* Content */}
-      <div className="px-4 -mt-16">
+      <div className="px-6 -mt-16">
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <form onSubmit={handleStartUsing} className="p-6 space-y-4">
             

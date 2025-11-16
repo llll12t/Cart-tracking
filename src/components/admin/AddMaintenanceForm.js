@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, runTransaction } from "firebase/firestore";
 
 export default function AddMaintenanceForm({ vehicleId, onClose, onlyCost = false }) {
+  const { userProfile } = useAuth();
   const now = new Date();
   const pad = (n) => n.toString().padStart(2, '0');
   const defaultDateTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
@@ -17,6 +19,7 @@ export default function AddMaintenanceForm({ vehicleId, onClose, onlyCost = fals
     vendor: '',
     expectedReturnDate: '',
   });
+  const [latestMileage, setLatestMileage] = useState(null);
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -52,6 +55,8 @@ export default function AddMaintenanceForm({ vehicleId, onClose, onlyCost = fals
             expectedReturnDate: formData.expectedReturnDate ? new Date(formData.expectedReturnDate) : null,
             maintenanceStatus: 'in_progress',
             createdAt: serverTimestamp(),
+            userId: userProfile?.uid || null,
+            source: 'admin',
           });
 
           tx.update(vehicleRef, { status: 'maintenance', lastMaintenanceId: maintRef.id });
@@ -60,7 +65,7 @@ export default function AddMaintenanceForm({ vehicleId, onClose, onlyCost = fals
         // บันทึกค่าใช้จ่าย - บันทึกใน expenses collection
         await addDoc(collection(db, "expenses"), {
           vehicleId: vehicleId,
-          userId: null, // ไม่มี userId เพราะบันทึกจาก admin
+          userId: userProfile?.uid || null, // ผู้บันทึก
           usageId: null, // ไม่เกี่ยวกับ usage
           type: 'other',
           amount: Number(formData.cost),
@@ -68,6 +73,7 @@ export default function AddMaintenanceForm({ vehicleId, onClose, onlyCost = fals
           note: formData.details,
           timestamp: new Date(formData.date),
           createdAt: serverTimestamp(),
+          source: 'admin',
         });
       }
 
@@ -83,7 +89,7 @@ export default function AddMaintenanceForm({ vehicleId, onClose, onlyCost = fals
     }
   };
 
-  // Prefill mileage from vehicle.currentMileage when the component mounts
+  // Fetch latest mileage for display only
   useEffect(() => {
     let mounted = true;
     const fetchVehicle = async () => {
@@ -93,7 +99,7 @@ export default function AddMaintenanceForm({ vehicleId, onClose, onlyCost = fals
         if (mounted && snap.exists()) {
           const data = snap.data();
           if (data.currentMileage || data.currentMileage === 0) {
-            setFormData(f => ({ ...f, mileage: data.currentMileage }));
+            setLatestMileage(data.currentMileage);
           }
         }
       } catch (err) {
@@ -134,10 +140,20 @@ export default function AddMaintenanceForm({ vehicleId, onClose, onlyCost = fals
             <input type="number" name="cost" placeholder="0.00" value={formData.cost} onChange={handleChange} required className="w-full p-2 border rounded"/>
           </div>
 
+          {latestMileage !== null && (
+            <div className="mb-1 text-xs text-gray-500">เลขไมล์ล่าสุด: <span className="font-semibold">{latestMileage}</span></div>
+          )}
           <div>
             <label className="block mb-1 text-sm font-medium">เลขไมล์ (ถ้ามี)</label>
             <input type="number" name="mileage" placeholder="เช่น 10500" value={formData.mileage} onChange={handleChange} className="w-full p-2 border rounded"/>
           </div>
+          {userProfile && (
+            <div className="bg-blue-50 p-3 rounded border border-blue-200">
+              <p className="text-sm text-gray-700">
+                <span className="font-medium">ผู้บันทึก:</span> {userProfile.name || userProfile.email || 'ไม่ระบุ'}
+              </p>
+            </div>
+          )}
 
           {formData.type === 'garage' && (
             <div className="space-y-2">

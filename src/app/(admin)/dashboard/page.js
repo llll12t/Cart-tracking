@@ -67,7 +67,10 @@ function AlertList({ title, items, type }) {
             <ul className="space-y-3">
                 {items.length > 0 ? items.map(item => (
                     <li key={item.id} className="flex justify-between items-center text-sm">
-                        <span>{item.brand} {item.model} ({item.licensePlate})</span>
+                        <span>
+                          {item.brand} {item.model} ({item.licensePlate})
+                          <span className="ml-2 text-xs text-gray-500">เลขไมล์ล่าสุด: {item.currentMileage?.toLocaleString?.() ?? '-'}</span>
+                        </span>
                         <span className={`font-semibold ${textColor}`}>
                             {type === 'fluidChange' 
                                 ? item.lastFluidMileage === undefined || item.lastFluidMileage === null
@@ -88,7 +91,10 @@ export default function AdminDashboardPage() {
     const [alerts, setAlerts] = useState({ tax: [], insurance: [], fluidChange: [] });
     const [activeUsages, setActiveUsages] = useState([]);
     const [recentExpenses, setRecentExpenses] = useState([]);
+    const [expenseVehicles, setExpenseVehicles] = useState({});
     const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     useEffect(() => {
         // ดึงข้อมูลสรุปสถานะรถ
@@ -101,16 +107,24 @@ export default function AdminDashboardPage() {
             let taxAlerts = [], insuranceAlerts = [], fluidChangeAlerts = [];
             const thirtyDaysFromNow = Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
 
-            // ดึงข้อมูล fluid expenses สำหรับตรวจสอบการเปลี่ยนของเหลว
+            // ดึงข้อมูล expenses ทั้งหมด (fuel, fluid, other) เพื่อหาเลขไมล์ล่าสุดของแต่ละคัน
             const { getDocs } = await import('firebase/firestore');
-            const expensesSnapshot = await getDocs(query(collection(db, 'expenses'), where('type', '==', 'fluid')));
+            const allExpensesSnapshot = await getDocs(collection(db, 'expenses'));
             const fluidExpensesByVehicle = {};
+            const latestMileageByVehicle = {};
             
-            expensesSnapshot.docs.forEach(doc => {
+            allExpensesSnapshot.docs.forEach(doc => {
                 const exp = doc.data();
                 if (exp.vehicleId && exp.mileage) {
-                    if (!fluidExpensesByVehicle[exp.vehicleId] || exp.mileage > fluidExpensesByVehicle[exp.vehicleId].mileage) {
-                        fluidExpensesByVehicle[exp.vehicleId] = exp;
+                    // หา expense ที่เป็น fluid ล่าสุด
+                    if (exp.type === 'fluid') {
+                        if (!fluidExpensesByVehicle[exp.vehicleId] || exp.mileage > fluidExpensesByVehicle[exp.vehicleId].mileage) {
+                            fluidExpensesByVehicle[exp.vehicleId] = exp;
+                        }
+                    }
+                    // หาเลขไมล์ล่าสุดจาก expenses ทั้งหมด
+                    if (!latestMileageByVehicle[exp.vehicleId] || exp.mileage > latestMileageByVehicle[exp.vehicleId]) {
+                        latestMileageByVehicle[exp.vehicleId] = exp.mileage;
                     }
                 }
             });
@@ -122,17 +136,16 @@ export default function AdminDashboardPage() {
                 else if (vehicle.status === 'maintenance') maintenance++;
 
                 // เช็ควันหมดอายุ
-                if (vehicle.taxDueDate && vehicle.taxDueDate <= thirtyDaysFromNow) taxAlerts.push(vehicle);
-                if (vehicle.insuranceExpireDate && vehicle.insuranceExpireDate <= thirtyDaysFromNow) insuranceAlerts.push(vehicle);
+                if (vehicle.taxDueDate && vehicle.taxDueDate <= thirtyDaysFromNow) taxAlerts.push({ ...vehicle, currentMileage: latestMileageByVehicle[vehicle.id] || 0 });
+                if (vehicle.insuranceExpireDate && vehicle.insuranceExpireDate <= thirtyDaysFromNow) insuranceAlerts.push({ ...vehicle, currentMileage: latestMileageByVehicle[vehicle.id] || 0 });
 
-                // เช็คการเปลี่ยนของเหลว - เตือนเมื่อวิ่งเกือบ 10,000 กม. นับจากการเปลี่ยนครั้งล่าสุด
+                // เช็คการเปลี่ยนของเหลว - เตือนเมื่อวิ่งครบ 10,000 กม. นับจากการเปลี่ยนครั้งล่าสุด
                 const lastFluidChange = fluidExpensesByVehicle[vehicle.id];
-                const currentMileage = vehicle.currentMileage || 0;
-                
+                const currentMileage = latestMileageByVehicle[vehicle.id] || 0;
                 if (lastFluidChange) {
                     const mileageSinceLastChange = currentMileage - lastFluidChange.mileage;
-                    // แจ้งเตือนเมื่อวิ่งครบ 9,000 กม. (เหลืออีก 1,000 กม. ก่อนครบ 10,000)
-                    if (mileageSinceLastChange >= 9000 && mileageSinceLastChange < 10000) {
+                    // แจ้งเตือนเมื่อเหลือไม่ถึง 1,000 กม. ก่อนครบ 10,000 กม. (9,000-9,999)
+                    if (mileageSinceLastChange >= 9000) {
                         fluidChangeAlerts.push({
                             ...vehicle,
                             lastFluidMileage: lastFluidChange.mileage,
@@ -141,7 +154,7 @@ export default function AdminDashboardPage() {
                         });
                     }
                 } else if (currentMileage >= 9000) {
-                    // ถ้าไม่เคยเปลี่ยนเลย และไมล์ปัจจุบันเกือบ 10,000
+                    // ถ้าไม่เคยเปลี่ยนเลย และไมล์ปัจจุบันครบ 9,000 ขึ้นไป
                     fluidChangeAlerts.push({
                         ...vehicle,
                         lastFluidMileage: 0,
@@ -160,15 +173,30 @@ export default function AdminDashboardPage() {
             setActiveUsages(usages);
         });
 
-        const unsubExpenses = onSnapshot(expensesQuery, (snapshot) => {
+        const unsubExpenses = onSnapshot(expensesQuery, async (snapshot) => {
             const expenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            // Sort by timestamp and get recent 5
+            // Sort by timestamp
             expenses.sort((a, b) => {
                 const aTime = a.timestamp?.toDate?.() || new Date(a.timestamp);
                 const bTime = b.timestamp?.toDate?.() || new Date(b.timestamp);
                 return bTime - aTime;
             });
-            setRecentExpenses(expenses.slice(0, 5));
+            setRecentExpenses(expenses);
+            // Fetch vehicle info for all expenses
+            const vehicleIds = Array.from(new Set(expenses.map(e => e.vehicleId).filter(Boolean)));
+            if (vehicleIds.length > 0) {
+                const { getDoc, doc } = await import('firebase/firestore');
+                const vehicleMap = {};
+                await Promise.all(vehicleIds.map(async (vid) => {
+                    try {
+                        const vSnap = await getDoc(doc(db, 'vehicles', vid));
+                        if (vSnap.exists()) vehicleMap[vid] = vSnap.data();
+                    } catch {}
+                }));
+                setExpenseVehicles(vehicleMap);
+            } else {
+                setExpenseVehicles({});
+            }
         });
 
         // Get total usage count
@@ -188,6 +216,17 @@ export default function AdminDashboardPage() {
     }, []);
 
     if (loading) return <p>Loading Dashboard...</p>;
+
+    // Pagination logic
+    const totalPages = Math.ceil(recentExpenses.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const currentExpenses = recentExpenses.slice(startIndex, endIndex);
+
+    const goToFirstPage = () => setCurrentPage(1);
+    const goToLastPage = () => setCurrentPage(totalPages);
+    const goToPrevPage = () => setCurrentPage(prev => Math.max(1, prev - 1));
+    const goToNextPage = () => setCurrentPage(prev => Math.min(totalPages, prev + 1));
 
     return (
         <div>
@@ -217,31 +256,83 @@ export default function AdminDashboardPage() {
                                 <thead className="bg-gray-50">
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ทะเบียน</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ประเภท</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เลขไมล์</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จำนวนเงิน</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">หมายเหตุ</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                    {recentExpenses.map(expense => (
-                                        <tr key={expense.id} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {formatDateTime(expense.timestamp)}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {getExpenseType(expense.type)}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-teal-600">
-                                                {expense.amount?.toLocaleString()} ฿
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-500">
-                                                {expense.note || '-'}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {currentExpenses.map(expense => {
+                                        const vehicle = expenseVehicles[expense.vehicleId];
+                                        return (
+                                            <tr key={expense.id} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {formatDateTime(expense.timestamp)}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {vehicle?.licensePlate || '-'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                    {getExpenseType(expense.type)}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                                    {expense.mileage ? `${expense.mileage.toLocaleString()} กม.` : '-'}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-teal-600">
+                                                    {expense.amount?.toLocaleString()} ฿
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-gray-500">
+                                                    {expense.note || '-'}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
+                        {/* Pagination controls */}
+                        {totalPages > 1 && (
+                            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+                                <div className="text-sm text-gray-700">
+                                    แสดง {startIndex + 1}-{Math.min(endIndex, recentExpenses.length)} จาก {recentExpenses.length} รายการ
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={goToFirstPage}
+                                        disabled={currentPage === 1}
+                                        className="px-3 py-1 bg-white border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                                    >
+                                        หน้าแรก
+                                    </button>
+                                    <button
+                                        onClick={goToPrevPage}
+                                        disabled={currentPage === 1}
+                                        className="px-3 py-1 bg-white border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                                    >
+                                        ก่อนหน้า
+                                    </button>
+                                    <span className="px-3 py-1 text-sm">
+                                        หน้า {currentPage} / {totalPages}
+                                    </span>
+                                    <button
+                                        onClick={goToNextPage}
+                                        disabled={currentPage === totalPages}
+                                        className="px-3 py-1 bg-white border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                                    >
+                                        ถัดไป
+                                    </button>
+                                    <button
+                                        onClick={goToLastPage}
+                                        disabled={currentPage === totalPages}
+                                        className="px-3 py-1 bg-white border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                                    >
+                                        หน้าสุดท้าย
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

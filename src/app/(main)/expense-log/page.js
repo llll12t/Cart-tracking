@@ -223,11 +223,17 @@ export default function ExpenseLogPage() {
 
   // Fetch active vehicle usage
   useEffect(() => {
-    if (!user && !userProfile) return;
+    if (!user && !userProfile) {
+      setLoading(false);
+      return;
+    }
 
     let isMounted = true;
+    let hasFetched = false;
 
     const fetchActiveUsage = async () => {
+      if (hasFetched) return;
+      hasFetched = true;
       try {
         const userId = userProfile?.lineId || user?.uid;
         const response = await fetch(`/api/vehicle-usage/active?userId=${userId}`);
@@ -238,40 +244,78 @@ export default function ExpenseLogPage() {
         if (result.success && result.usage) {
           setActiveUsage(result.usage);
 
-          // Fetch expenses ด้วย vehicleId เพื่อให้ได้ประวัติการเติมน้ำมันของรถคันนี้ทั้งหมด
-          const expensesResponse = await fetch(`/api/expenses?vehicleId=${result.usage.vehicleId}`);
+          // ดึงข้อมูล vehicle และ expenses พร้อมกัน (parallel)
+          const [vehicleResponse, expensesResponse] = await Promise.all([
+            fetch(`/api/vehicles/${result.usage.vehicleId}`),
+            fetch(`/api/expenses?vehicleId=${result.usage.vehicleId}`)
+          ]);
+
+          let vehicleCurrentMileage = null;
+          if (vehicleResponse.ok) {
+            const vehicleData = await vehicleResponse.json();
+            if (vehicleData.currentMileage) {
+              vehicleCurrentMileage = vehicleData.currentMileage;
+            }
+          }
+
           const expensesResult = await expensesResponse.json();
 
           if (!isMounted) return;
 
           if (expensesResult.success && expensesResult.expenses) {
-            // หาเลขไมล์จากการเติมน้ำมันครั้งล่าสุด
-            const fuelExpenses = expensesResult.expenses
-              .filter(exp => exp.type === 'fuel' && exp.mileage)
-              .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            // ประมวลผล expenses ครั้งเดียว (optimize)
+            const expensesByType = {
+              all: [],
+              fuel: [],
+              fluid: []
+            };
 
-            if (fuelExpenses.length > 0) {
-              const lastMileage = fuelExpenses[0].mileage;
-              setLastFuelMileage(lastMileage);
-              setLatestFuelExpense(fuelExpenses[0]);
+            // แยก expenses ตามประเภทในรอบเดียว
+            expensesResult.expenses.forEach(exp => {
+              if (exp.mileage) {
+                expensesByType.all.push(exp);
+                if (exp.type === 'fuel') expensesByType.fuel.push(exp);
+                if (exp.type === 'fluid') expensesByType.fluid.push(exp);
+              }
+            });
+
+            // เรียง all expenses ตามเวลา
+            expensesByType.all.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            // ตั้งค่า state ตามลำดับความสำคัญ: expenses > vehicle.currentMileage > usage.startMileage
+            if (expensesByType.all.length > 0) {
+              const latestMileage = expensesByType.all[0].mileage;
+              setLastFuelMileage(latestMileage);
+            } else if (vehicleCurrentMileage) {
+              setLastFuelMileage(vehicleCurrentMileage);
             } else if (result.usage.startMileage) {
-              // ถ้ายังไม่เคยเติมเลย ใช้เลขไมล์เริ่มต้น
               setLastFuelMileage(result.usage.startMileage);
+            }
+
+            // ตั้งค่า fuel และ fluid expenses
+            if (expensesByType.fuel.length > 0) {
+              expensesByType.fuel.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+              setLatestFuelExpense(expensesByType.fuel[0]);
+            } else {
               setLatestFuelExpense(null);
             }
-            // หาเปลี่ยนของเหลวล่าสุด
-            const fluidExpenses = expensesResult.expenses
-              .filter(exp => exp.type === 'fluid' && exp.mileage)
-              .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            if (fluidExpenses.length > 0) {
-              setFluidLatest(fluidExpenses[0]);
+
+            if (expensesByType.fluid.length > 0) {
+              expensesByType.fluid.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+              setFluidLatest(expensesByType.fluid[0]);
             } else {
               setFluidLatest(null);
             }
-          } else if (result.usage.startMileage) {
-            setLastFuelMileage(result.usage.startMileage);
-            setMileage(result.usage.startMileage.toString());
+          } else if (vehicleCurrentMileage) {
+            // ถ้าไม่มี expenses เลย หรือ fetch ไม่สำเร็จ ใช้ currentMileage จาก vehicle
+            setLastFuelMileage(vehicleCurrentMileage);
             setLatestFuelExpense(null);
+            setFluidLatest(null);
+          } else if (result.usage.startMileage) {
+            // ถ้าไม่มี currentMileage ใช้ startMileage
+            setLastFuelMileage(result.usage.startMileage);
+            setLatestFuelExpense(null);
+            setFluidLatest(null);
           }
         } else {
           // No active usage - redirect back
@@ -290,8 +334,7 @@ export default function ExpenseLogPage() {
     return () => {
       isMounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user, userProfile]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -404,7 +447,7 @@ export default function ExpenseLogPage() {
       </div>
 
       {/* Content */}
-      <div className="px-4 -mt-16">
+      <div className="px-6 -mt-16">
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             {/* Vehicle Info */}
@@ -417,12 +460,12 @@ export default function ExpenseLogPage() {
                 <p className="font-semibold text-teal-900">{activeUsage.vehicleLicensePlate}</p>
                 {lastFuelMileage && (
                   <p className="text-sm text-teal-700">
-                    เลขไมล์จากการเติมล่าสุด: {lastFuelMileage.toLocaleString()} กม.
+                    เลขไมล์ล่าสุด: {lastFuelMileage.toLocaleString()} กม.
                   </p>
                 )}
                 {/* แสดงรายการเปลี่ยนของเหลวล่าสุด */}
                 {fluidLatest && (
-                  <div className="mt-2 text-sm text-blue-700">
+                  <div className="text-sm text-blue-700">
                     <span className="font-semibold">การเปลี่ยนของเหลวล่าสุด:</span> {fluidLatest.mileage ? fluidLatest.mileage.toLocaleString() + ' กม.' : '-'}
                     {fluidLatest.note && <span className="ml-2 text-gray-500">({fluidLatest.note})</span>}
                   </div>

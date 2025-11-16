@@ -24,12 +24,12 @@ export default function EditVehiclePage() {
     imageUrl: "",
     taxDueDate: "",
     insuranceExpireDate: "",
-    status: "active"
+    status: "available"
   });
   // Initial fluid setup (optional)
   const [initFluidEnabled, setInitFluidEnabled] = useState(false);
   const [initFluid, setInitFluid] = useState({
-    fluidType: "engine_oil",
+    fluidType: "เปลี่ยนถ่ายของเหลว",
     date: new Date().toISOString().split('T')[0],
     mileage: "",
     cost: "",
@@ -95,8 +95,8 @@ export default function EditVehiclePage() {
         };
 
         // normalize status to match Add page
-        const rawStatus = snap.data().status || "active";
-        const normalizedStatus = rawStatus === 'available' ? 'active' : rawStatus;
+        const rawStatus = snap.data().status || "available";
+        const normalizedStatus = rawStatus === 'available' ? 'available' : rawStatus;
 
         setForm({
           brand: snap.data().brand || "",
@@ -175,7 +175,7 @@ export default function EditVehiclePage() {
         color: form.color,
         note: form.note,
         imageUrl: imageUrl,
-        status: form.status || "active",
+        status: form.status || "available",
         taxDueDate: form.taxDueDate ? new Date(form.taxDueDate) : null,
         insuranceExpireDate: form.insuranceExpireDate ? new Date(form.insuranceExpireDate) : null
       });
@@ -249,10 +249,10 @@ export default function EditVehiclePage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block mb-1 text-sm font-medium">สถานะรถ</label>
-                <select name="status" value={form.status || 'active'} onChange={handleChange} className="w-full p-3 border rounded-md">
-                  <option value="active">พร้อมใช้งาน</option>
+                <select name="status" value={form.status || 'available'} onChange={handleChange} className="w-full p-3 border rounded-md">
+                  <option value="available">พร้อมใช้งาน</option>
                   <option value="maintenance">ซ่อมบำรุง</option>
-                  <option value="inactive">ไม่พร้อมใช้งาน</option>
+                  <option value="retired">ไม่พร้อมใช้งาน</option>
                 </select>
               </div>
               <div>
@@ -291,9 +291,9 @@ export default function EditVehiclePage() {
                 <input name="color" value={form.color} onChange={handleChange} className="w-full p-3 border rounded-md" />
               </div>
               <div>
-                <label className="block mb-1 text-sm font-medium">เลขไมล์เริ่มต้น</label>
-                <input name="currentMileage" type="number" value={form.currentMileage} readOnly className="w-full p-3 border rounded-md bg-gray-100" />
-                <p className="text-xs text-gray-500 mt-1">* ไม่สามารถแก้ไขเลขไมล์เริ่มต้นได้</p>
+                <label className="block mb-1 text-sm font-medium">เลขไมล์ปัจจุบัน</label>
+                <input name="currentMileage" type="number" value={form.currentMileage} onChange={handleChange} className="w-full p-3 border rounded-md" />
+                <p className="text-xs text-gray-500 mt-1">* สามารถแก้ไขเลขไมล์ได้</p>
               </div>
             </div>
 
@@ -365,7 +365,11 @@ export default function EditVehiclePage() {
           <aside className="flex flex-col items-center gap-4">
             <div className="w-full">
               <label className="block mb-2 text-sm font-medium">รูปรถ</label>
-              <div className="w-full bg-gray-50 rounded-lg border p-3 flex items-center justify-center">
+              <div
+                className="w-full bg-gray-50 rounded-lg border p-3 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-blue-400"
+                onClick={() => document.getElementById('vehicle-image-input')?.click()}
+                title="คลิกเพื่ออัพโหลดรูปใหม่"
+              >
                 {form.imageUrl ? (
                   !imageBroken ? (
                     <Image
@@ -384,7 +388,13 @@ export default function EditVehiclePage() {
                   <div className="w-full h-44 bg-gray-100 flex items-center justify-center rounded text-gray-400">ไม่มีรูป</div>
                 )}
               </div>
-              <input type="file" accept="image/*" onChange={handleImageChange} className="mt-3 w-full" />
+              <input
+                id="vehicle-image-input"
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="hidden"
+              />
               <div className="mt-3 flex gap-2">
                 <input value={imageUrlInput} onChange={(e) => setImageUrlInput(e.target.value)} placeholder="วางลิงก์รูปที่นี่" className="flex-1 p-2 border rounded" />
                 <button type="button" onClick={applyImageUrl} className="px-3 py-2 bg-blue-600 text-white rounded">ใช้ลิงก์</button>

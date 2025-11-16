@@ -37,10 +37,8 @@ function VehicleList({ vehicles }) {
         return "พร้อมใช้งาน";
       case "pending":
         return "อยู่ระหว่างรออนุมัติ";
-      case "in_use":
       case "in-use":
         return "กำลังใช้งาน";
-      case "on_trip":
       case "on-trip":
         return "อยู่ระหว่างเดินทาง";
       case "maintenance":
@@ -63,9 +61,9 @@ function VehicleList({ vehicles }) {
     console.log(`[DEBUG] VehicleList id=${v.id} latestFuel=`, v.latestFuel);
   });
   return (
-    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {vehicles.map((vehicle) => (
-        <div key={vehicle.id} className="bg-white rounded-2xl shadow-lg p-6 flex flex-col min-h-[320px] justify-between">
+        <div key={vehicle.id} className="bg-white rounded-lg shadow p-6 flex flex-col min-h-[320px] justify-between">
           <div className="flex gap-6 items-center mb-4 relative">
             {/* Status badge overlay on image */}
             <div className="absolute left-0 top-0 z-10">
@@ -189,7 +187,7 @@ function VehicleList({ vehicles }) {
               </Link>
               <Link
                 href={`/vehicles/${vehicle.id}/fluid`}
-                className="px-3 py-3 rounded-md text-xs bg-yellow-100 text-yellow hover:bg-green-200"
+                className="px-3 py-3 rounded-md text-xs bg-yellow-100 text-yellow hover:bg-yellow-200"
               >
                 ของเหลว
               </Link>

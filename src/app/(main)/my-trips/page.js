@@ -198,7 +198,7 @@ export default function MyTripsPage() {
         <div className="min-h-screen bg-gray-50">
             <MainHeader userProfile={userProfile} activeTab={activeTab} setActiveTab={setActiveTab} />
 
-            <div className="bg-white px-4 py-2 -mt-16">
+            <div className="bg-white px-6 py-2 -mt-16">
 
                 {usageHistory.length > 0 ? (
                     <div className="space-y-4 pb-8">

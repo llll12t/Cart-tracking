@@ -6,36 +6,63 @@ import { collection, query, where, orderBy, onSnapshot, doc, getDoc, collectionG
 import Image from 'next/image';
 import { getImageUrl } from '@/lib/imageHelpers';
 
-function formatDateTime(ts) {
-  if (!ts) return '-';
-  try {
-    let d;
-    // Firestore timestamp
-    if (ts.seconds && typeof ts.seconds === 'number') d = new Date(ts.seconds * 1000);
-    // calendar-only string YYYY-MM-DD -> local midnight
-    else if (typeof ts === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ts)) {
-      const parts = ts.split('-');
-      d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0);
-    } else d = new Date(ts);
-    return d.toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  } catch (e) {
-    return '-';
-  }
-}
 
 export default function TripHistoryPage() {
+  function formatDateTime(ts) {
+    if (!ts) return '-';
+    try {
+      let d;
+      // Firestore timestamp
+      if (ts.seconds && typeof ts.seconds === 'number') d = new Date(ts.seconds * 1000);
+      // calendar-only string YYYY-MM-DD -> local midnight
+      else if (typeof ts === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ts)) {
+        const parts = ts.split('-');
+        d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0);
+      } else d = new Date(ts);
+      return d.toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+      return '-';
+    }
+  }
+
+  // ...existing code...
+
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [filterVehicle, setFilterVehicle] = useState('');
   const [filterUser, setFilterUser] = useState('');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
+  // For delete
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingTrip, setDeletingTrip] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  // Delete trip logic
+  const handleDeleteTrip = async () => {
+    if (!deletingTrip) return;
+    setIsDeleting(true);
+    try {
+      // Delete expenses related to this trip
+      const { getDocs, query, collection, where, deleteDoc, doc: docRef } = await import('firebase/firestore');
+      const expQ = query(collection(db, 'expenses'), where('usageId', '==', deletingTrip.id));
+      const expSnap = await getDocs(expQ);
+      for (const expDoc of expSnap.docs) {
+        await deleteDoc(expDoc.ref);
+      }
+      // Delete the trip itself
+      await deleteDoc(docRef(db, 'vehicle-usage', deletingTrip.id));
+      setShowDeleteModal(false);
+      setDeletingTrip(null);
+    } catch (e) {
+      alert('เกิดข้อผิดพลาดในการลบ');
+    }
+    setIsDeleting(false);
+  };
 
   useEffect(() => {
     // Load completed vehicle-usage records ordered by endTime desc
@@ -327,15 +354,21 @@ export default function TripHistoryPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                        <button 
-                          onClick={async () => { 
-                            setExpandedId(expandedId === t.id ? null : t.id); 
-                            if (!t.expenses || t.expenses.length === 0) await loadExpensesFor(t); 
-                          }} 
-                          className="text-indigo-600 hover:text-indigo-900"
-                        >
-                          {expandedId === t.id ? 'ย่อ' : 'รายละเอียด'}
-                        </button>
+                        <div className="flex gap-2 justify-end">
+                          <button 
+                            onClick={async () => { 
+                              setExpandedId(expandedId === t.id ? null : t.id); 
+                              if (!t.expenses || t.expenses.length === 0) await loadExpensesFor(t); 
+                            }} 
+                            className="text-indigo-600 hover:text-indigo-900"
+                          >
+                            {expandedId === t.id ? 'ย่อ' : 'รายละเอียด'}
+                          </button>
+                          <button
+                            onClick={() => { setShowDeleteModal(true); setDeletingTrip(t); }}
+                            className="text-red-600 hover:text-red-900"
+                          >ลบ</button>
+                        </div>
                       </td>
                     </tr>
                     {expandedId === t.id && (
@@ -381,6 +414,20 @@ export default function TripHistoryPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Modal ลบข้อมูล */}
+          {showDeleteModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+              <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
+                <h2 className="text-xl font-bold mb-4 text-red-700">ยืนยันการลบประวัติการเดินทาง</h2>
+                <p className="mb-6">คุณแน่ใจหรือไม่ว่าต้องการลบประวัติการเดินทางนี้? <br/> <span className="text-red-500 font-semibold">การลบนี้ไม่สามารถย้อนกลับได้</span></p>
+                <div className="flex justify-end gap-4">
+                  <button onClick={() => setShowDeleteModal(false)} disabled={isDeleting} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
+                  <button onClick={handleDeleteTrip} disabled={isDeleting} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">{isDeleting ? 'กำลังลบ...' : 'ลบ'}</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Pagination */}
           {totalPages > 1 && (

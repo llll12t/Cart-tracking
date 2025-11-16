@@ -22,11 +22,15 @@ export default function MyVehiclePage() {
     const [showReturnModal, setShowReturnModal] = useState(false);
     const [returnMessage, setReturnMessage] = useState("");
 
-    // Fetch active vehicle usage
+    // Fetch active vehicle usage และ expenses พร้อมกัน
     useEffect(() => {
         if (!user && !userProfile) {
+            setLoading(false);
             return;
         }
+
+        let unsubVehicle = null;
+        let isMounted = true;
 
         const fetchActiveUsage = async () => {
             try {
@@ -34,13 +38,18 @@ export default function MyVehiclePage() {
                 const response = await fetch(`/api/vehicle-usage/active?userId=${userId}`);
                 const result = await response.json();
 
+                if (!isMounted) return;
+
                 if (result.success && result.usage) {
                     setActiveUsage(result.usage);
                     setEndMileage(result.usage.startMileage?.toString() || "");
-                    // Fetch vehicle details (realtime)
+                    
+                    // โหลด vehicle และ expenses พร้อมกัน
                     if (result.usage.vehicleId) {
+                        // 1. Fetch vehicle details (realtime)
                         const vehicleRef = doc(db, "vehicles", result.usage.vehicleId);
-                        const unsubVehicle = onSnapshot(vehicleRef, (docSnap) => {
+                        unsubVehicle = onSnapshot(vehicleRef, (docSnap) => {
+                            if (!isMounted) return;
                             if (docSnap.exists()) {
                                 setVehicle({ id: docSnap.id, ...docSnap.data() });
                             } else {
@@ -51,49 +60,43 @@ export default function MyVehiclePage() {
                                     model: ''
                                 });
                             }
-                            setLoading(false);
                         });
-                        // Cleanup realtime listener
-                        return () => unsubVehicle();
+
+                        // 2. Fetch expenses (ครั้งเดียว ไม่ต้อง polling)
+                        try {
+                            const expensesResponse = await fetch(`/api/expenses?usageId=${result.usage.id}`);
+                            const expensesResult = await expensesResponse.json();
+                            if (isMounted && expensesResult.success) {
+                                setExpenses(expensesResult.expenses || []);
+                            }
+                        } catch (error) {
+                            console.error("Error fetching expenses:", error);
+                        }
+                        
+                        setLoading(false);
                     } else {
                         setLoading(false);
                     }
                 } else {
                     setActiveUsage(null);
                     setVehicle(null);
+                    setExpenses([]);
                     setLoading(false);
                 }
             } catch (error) {
-                setLoading(false);
+                if (isMounted) {
+                    setLoading(false);
+                }
             }
         };
 
         fetchActiveUsage();
-    }, [user, userProfile]);
 
-    // Fetch expenses for current usage
-    useEffect(() => {
-        if (!activeUsage) return;
-
-        const fetchExpenses = async () => {
-            try {
-                const response = await fetch(`/api/expenses?usageId=${activeUsage.id}`);
-                const result = await response.json();
-
-                if (result.success) {
-                    setExpenses(result.expenses || []);
-                }
-            } catch (error) {
-                console.error("Error fetching expenses:", error);
-            }
+        return () => {
+            isMounted = false;
+            if (unsubVehicle) unsubVehicle();
         };
-
-        fetchExpenses();
-
-        // Refresh expenses every 10 seconds
-        const interval = setInterval(fetchExpenses, 10000);
-        return () => clearInterval(interval);
-    }, [activeUsage]);
+    }, [user, userProfile]);
 
     const handleReturnVehicle = async () => {
         if (!activeUsage) {
@@ -181,6 +184,7 @@ export default function MyVehiclePage() {
             if (!result.success) {
                 alert(result.error || 'เกิดข้อผิดพลาดในการลบ');
             } else {
+                // อัพเดท state ทันทีโดยไม่ต้อง reload
                 setExpenses(prev => prev.filter(e => e.id !== expenseId));
             }
         } catch (err) {
@@ -188,6 +192,31 @@ export default function MyVehiclePage() {
             alert('เกิดข้อผิดพลาดในการลบ');
         }
     };
+
+    // Refresh expenses หลังบันทึกค่าใช้จ่ายใหม่
+    const refreshExpenses = async () => {
+        if (!activeUsage) return;
+        try {
+            const response = await fetch(`/api/expenses?usageId=${activeUsage.id}`);
+            const result = await response.json();
+            if (result.success) {
+                setExpenses(result.expenses || []);
+            }
+        } catch (error) {
+            console.error("Error refreshing expenses:", error);
+        }
+    };
+
+    // เรียก refreshExpenses เมื่อกลับมาที่หน้านี้
+    useEffect(() => {
+        const handleFocus = () => {
+            if (activeUsage) {
+                refreshExpenses();
+            }
+        };
+        window.addEventListener('focus', handleFocus);
+        return () => window.removeEventListener('focus', handleFocus);
+    }, [activeUsage]);
 
     if (loading) {
         return (
@@ -206,7 +235,7 @@ export default function MyVehiclePage() {
         return (
             <div className="min-h-screen bg-gray-50">
                 <MainHeader userProfile={userProfile} activeTab={activeTab} setActiveTab={setActiveTab} />
-                <div className="px-4 py-2 -mt-16">
+                <div className="px-6 py-2 -mt-16">
                     <div className="bg-white rounded-xl shadow-sm p-8 text-center">
                         <svg className="w-20 h-20 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -229,7 +258,7 @@ export default function MyVehiclePage() {
         <div className="min-h-screen bg-gray-50">
             <MainHeader userProfile={userProfile} activeTab={activeTab} setActiveTab={setActiveTab} />
 
-            <div className="px-4 py-2 -mt-16">
+            <div className="px-6 py-2 -mt-16">
                 {/* Vehicle Card */}
                 <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-4">
                     <div className="flex items-center p-4 gap-4">
@@ -325,7 +354,7 @@ export default function MyVehiclePage() {
 
                 {/* Return Vehicle Button */}
                 <button onClick={() => setShowReturnModal(true)}
-                    className="w-full py-4 bg-red-800 text-white rounded-lg font-semibold hover:bg-red-700 transition-all text-sm"
+                    className="w-full py-4 bg-red-700 text-white rounded-lg font-semibold hover:bg-red-700 transition-all text-sm"
                 >
                       ส่งคืนรถ
                 </button>

@@ -13,6 +13,9 @@ export default function FluidHistoryPage() {
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [isReloading, setIsReloading] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [selectedItems, setSelectedItems] = useState([]);
+    const [itemToDelete, setItemToDelete] = useState(null);
 
     useEffect(() => {
         if (!vehicleId) return;
@@ -48,7 +51,7 @@ export default function FluidHistoryPage() {
     }, [vehicleId]);
 
     // แสดงชื่อผู้บันทึก
-    function FluidRecord({ record }) {
+    function FluidRecord({ record, onSelect, isSelected }) {
         const formatDateTime = (timestamp) => {
             if (!timestamp) return '-';
             let dateObj;
@@ -81,14 +84,14 @@ export default function FluidHistoryPage() {
                         const snap = await getDoc(userRef);
                         if (snap.exists()) {
                             const data = snap.data();
-                            setUserName(data.displayName || data.name || data.fullName || '-');
+                            setUserName(data.name || data.fullName || '-');
                             return;
                         }
                         const q = query(collection(db, 'users'), where('lineId', '==', uid));
                         const qSnap = await getDocs(q);
                         if (!qSnap.empty) {
                             const data = qSnap.docs[0].data();
-                            setUserName(data.displayName || data.name || data.fullName || '-');
+                            setUserName(data.name || data.fullName || '-');
                             return;
                         }
                         setUserName('-');
@@ -104,6 +107,14 @@ export default function FluidHistoryPage() {
 
         return (
             <tr className="hover:bg-gray-50">
+                <td className="px-4 py-3 text-center">
+                    <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => onSelect(record.id)}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                    />
+                </td>
                 <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{formatDateTime(record.timestamp)}</td>
                 <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{userName}</td>
                 <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.mileage ? record.mileage.toLocaleString() + ' กม.' : '-'}</td>
@@ -120,6 +131,43 @@ export default function FluidHistoryPage() {
     const lastMileage = fluidLogs.length > 0 && fluidLogs.some(r => r.mileage) 
         ? Math.max(...fluidLogs.filter(r => r.mileage).map(r => r.mileage)) 
         : null;
+
+    const handleDeleteSelected = async () => {
+        setShowDeleteConfirm(false);
+        setIsReloading(true);
+        try {
+            const { deleteDoc, doc: docRef } = await import('firebase/firestore');
+            const idsToDelete = itemToDelete ? [itemToDelete] : selectedItems;
+            
+            // Delete selected items
+            const deletePromises = idsToDelete.map(id => 
+                deleteDoc(docRef(db, 'expenses', id))
+            );
+            await Promise.all(deletePromises);
+            
+            setSelectedItems([]);
+            setItemToDelete(null);
+            setIsReloading(false);
+        } catch (error) {
+            console.error('Error deleting fluid records:', error);
+            alert('เกิดข้อผิดพลาดในการลบ');
+            setIsReloading(false);
+        }
+    };
+
+    const handleSelectAll = () => {
+        if (selectedItems.length === fluidLogs.length) {
+            setSelectedItems([]);
+        } else {
+            setSelectedItems(fluidLogs.map(log => log.id));
+        }
+    };
+
+    const handleSelectItem = (id) => {
+        setSelectedItems(prev => 
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
 
     if (loading) return <p>Loading fluid logs...</p>;
 
@@ -139,9 +187,19 @@ export default function FluidHistoryPage() {
                             )}
                         </div>
                     </div>
-                    <button onClick={() => setShowForm(true)} className="px-4 py-2 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700">
-                        + เพิ่มรายการเปลี่ยนของเหลว
-                    </button>
+                    <div className="flex gap-2">
+                        {selectedItems.length > 0 && (
+                            <button 
+                                onClick={() => { setItemToDelete(null); setShowDeleteConfirm(true); }} 
+                                className="px-4 py-2 font-bold text-white bg-red-600 rounded-lg hover:bg-red-700"
+                            >
+                                🗑️ ลบที่เลือก ({selectedItems.length})
+                            </button>
+                        )}
+                        <button onClick={() => setShowForm(true)} className="px-4 py-2 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700">
+                            + เพิ่มรายการเปลี่ยนของเหลว
+                        </button>
+                    </div>
                 </div>
             )}
             <div className="space-y-4">
@@ -155,6 +213,14 @@ export default function FluidHistoryPage() {
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
+                                <th className="px-4 py-3 text-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedItems.length === fluidLogs.length && fluidLogs.length > 0}
+                                        onChange={handleSelectAll}
+                                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">วันที่/เวลา</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ผู้บันทึก</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">เลขไมล์</th>
@@ -164,10 +230,10 @@ export default function FluidHistoryPage() {
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {fluidLogs.length > 0 ? (
-                                fluidLogs.map(log => <FluidRecord key={log.id} record={log} />)
+                                fluidLogs.map(log => <FluidRecord key={log.id} record={log} onSelect={handleSelectItem} isSelected={selectedItems.includes(log.id)} />)
                             ) : (
                                 <tr>
-                                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">ยังไม่มีประวัติการเปลี่ยนของเหลว</td>
+                                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">ยังไม่มีประวัติการเปลี่ยนของเหลว</td>
                                 </tr>
                             )}
                         </tbody>
@@ -183,6 +249,35 @@ export default function FluidHistoryPage() {
                     }, 300);
                 }
             }} />}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="bg-white rounded-lg p-6 max-w-md mx-4">
+                        <h3 className="text-xl font-bold text-gray-900 mb-4">⚠️ ยืนยันการลบ</h3>
+                        <p className="text-gray-700 mb-6">
+                            {itemToDelete 
+                                ? 'คุณแน่ใจหรือไม่ที่จะลบรายการนี้?' 
+                                : `คุณแน่ใจหรือไม่ที่จะลบ ${selectedItems.length} รายการที่เลือก?`
+                            }
+                            <br />
+                            <span className="text-red-500 font-semibold">การกระทำนี้ไม่สามารถย้อนกลับได้</span>
+                        </p>
+                        <div className="flex justify-end gap-4">
+                            <button 
+                                onClick={() => { setShowDeleteConfirm(false); setItemToDelete(null); }} 
+                                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            >
+                                ยกเลิก
+                            </button>
+                            <button 
+                                onClick={handleDeleteSelected} 
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                            >
+                                ยืนยันลบ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {isReloading && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
                     <div className="text-center">

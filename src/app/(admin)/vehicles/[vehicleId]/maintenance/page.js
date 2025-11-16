@@ -8,7 +8,7 @@ import AddMaintenanceForm from '@/components/admin/AddMaintenanceForm';
 import { useCallback } from 'react';
 import Image from 'next/image';
 
-function MaintenanceRecord({ record }) {
+function MaintenanceRecord({ record, onSelect, isSelected }) {
     const formatDateTime = (value) => {
         if (!value) return '-';
         let dateObj;
@@ -55,12 +55,23 @@ function MaintenanceRecord({ record }) {
     };
 
     // แสดง badge แหล่งที่มา
-    const sourceBadge = record.source === 'expenses' ? (
-        <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">จากทริป</span>
-    ) : null;
+    let sourceBadge = null;
+    if (record.source === 'admin' || record.source === 'maintenances') {
+        sourceBadge = <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">บันทึกจากพนักงาน</span>;
+    } else if (record.source === 'expenses') {
+        sourceBadge = <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">จากทริป</span>;
+    }
 
     return (
         <tr className="hover:bg-gray-50">
+            <td className="px-4 py-3 text-center">
+                <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onSelect(record.id)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                />
+            </td>
             <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{displayDate}</td>
             <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{typeLabel}</td>
             <td className="px-4 py-3 text-sm text-gray-900">{record.vendor ?? '-'}</td>
@@ -86,6 +97,10 @@ export default function MaintenancePage() {
     const [showReceiveModal, setShowReceiveModal] = useState(false);
     const [currentRecord, setCurrentRecord] = useState(null);
     const [receiveData, setReceiveData] = useState({ finalCost: '', finalMileage: '', notes: '' });
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isClearing, setIsClearing] = useState(false);
+    const [selectedItems, setSelectedItems] = useState([]);
+    const [itemToDelete, setItemToDelete] = useState(null);
 
     useEffect(() => {
         if (!vehicleId) return;
@@ -99,46 +114,37 @@ export default function MaintenancePage() {
 
     useEffect(() => {
         if (!vehicleId) return;
-        
-        // ดึง maintenances
+        // subscribe maintenances
         const q = query(
             collection(db, "maintenances"),
             where("vehicleId", "==", vehicleId),
             orderBy("date", "desc")
         );
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribeMaint = onSnapshot(q, (snapshot) => {
             const recordsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), source: 'maintenances' }));
             setRecords(recordsData);
         });
 
-        // ดึง expenses ที่ type='other' (ค่าใช้จ่ายทั่วไป) สำหรับรถคันนี้
-        const fetchMaintenanceExpenses = async () => {
-            try {
-                const expensesSnap = await (await import('firebase/firestore')).getDocs(
-                    query(
-                        collection(db, 'expenses'),
-                        where('vehicleId', '==', vehicleId),
-                        where('type', '==', 'other')
-                    )
-                );
-                
-                const maintExps = expensesSnap.docs.map(d => ({ 
-                    id: d.id, 
-                    ...d.data(), 
-                    source: 'expenses'
-                }));
-
-                console.log(`[DEBUG] Found ${maintExps.length} other expenses for vehicle ${vehicleId}`);
-                setMaintenanceExpenses(maintExps);
-            } catch (e) {
-                console.error('Error fetching maintenance expenses:', e);
-            }
+        // subscribe expenses (type=other)
+        const expQ = query(
+            collection(db, 'expenses'),
+            where('vehicleId', '==', vehicleId),
+            where('type', '==', 'other')
+        );
+        const unsubscribeExp = onSnapshot(expQ, (snapshot) => {
+            const maintExps = snapshot.docs.map(d => ({
+                id: d.id,
+                ...d.data(),
+                source: 'expenses'
+            }));
+            setMaintenanceExpenses(maintExps);
             setLoading(false);
+        });
+
+        return () => {
+            unsubscribeMaint();
+            unsubscribeExp();
         };
-
-        fetchMaintenanceExpenses();
-
-        return () => unsubscribe();
     }, [vehicleId]);
 
     // รวมข้อมูลจาก maintenances และ expenses
@@ -147,9 +153,14 @@ export default function MaintenancePage() {
         ...maintenanceExpenses.map(exp => {
             // ใช้ timestamp หรือ createdAt เป็นวันที่บันทึก
             let date = exp.timestamp || exp.createdAt;
-            // ถ้า date เป็น string ให้แปลงเป็น Date object
             if (date && typeof date === 'string') date = new Date(date);
-            
+            // กำหนด source ให้ถูกต้อง
+            let source = exp.source;
+            if (exp.source === 'admin' || exp.userId) {
+                source = 'admin';
+            } else if (!exp.source) {
+                source = 'expenses';
+            }
             return {
                 id: exp.id,
                 date,
@@ -159,7 +170,7 @@ export default function MaintenancePage() {
                 details: exp.note || '-',
                 finalCost: exp.amount || 0,
                 maintenanceStatus: 'recorded',
-                source: 'expenses'
+                source
             };
         })
     ].sort((a, b) => {
@@ -205,6 +216,49 @@ export default function MaintenancePage() {
         return <p>Loading maintenance history...</p>;
     }
 
+    // ลบรายการที่เลือก
+    const handleDeleteSelected = async () => {
+        setIsClearing(true);
+        setShowDeleteConfirm(false);
+        try {
+            const { deleteDoc, doc: docRef } = await import('firebase/firestore');
+            const idsToDelete = itemToDelete ? [itemToDelete] : selectedItems;
+            const deletePromises = idsToDelete.map(id => {
+                const found = allRecords.find(r => r.id === id);
+                if (found && found.source === 'expenses') {
+                    return deleteDoc(docRef(db, 'expenses', id));
+                } else if (found && found.source === 'maintenances') {
+                    return deleteDoc(docRef(db, 'maintenances', id));
+                }
+                return Promise.resolve();
+            });
+            await Promise.all(deletePromises);
+            // Remove deleted records from state immediately for real-time feedback
+            setRecords(prev => prev.filter(r => !idsToDelete.includes(r.id)));
+            setMaintenanceExpenses(prev => prev.filter(r => !idsToDelete.includes(r.id)));
+            setSelectedItems([]);
+            setItemToDelete(null);
+        } catch (e) {
+            alert('เกิดข้อผิดพลาดในการลบประวัติ');
+        }
+        setIsClearing(false);
+    };
+
+    const handleSelectAll = () => {
+        const ids = allRecords.map(r => r.id);
+        if (selectedItems.length === ids.length) {
+            setSelectedItems([]);
+        } else {
+            setSelectedItems(ids);
+        }
+    };
+
+    const handleSelectItem = (id) => {
+        setSelectedItems(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
     return (
         <div>
             {vehicle && (
@@ -218,9 +272,38 @@ export default function MaintenancePage() {
                             <p className="text-xl text-gray-600">{vehicle.brand} {vehicle.model} ({vehicle.licensePlate})</p>
                         </div>
                     </div>
-                    <button onClick={() => setShowForm(true)} className="px-6 py-3 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 shadow-md transition-all hover:shadow-lg">
-                        + บันทึกค่าใช้จ่าย
-                    </button>
+                    <div className="flex gap-2">
+                        {selectedItems.length > 0 && (
+                            <button 
+                                onClick={() => { setItemToDelete(null); setShowDeleteConfirm(true); }} 
+                                className="px-6 py-3 font-bold text-white bg-red-600 rounded-lg hover:bg-red-700 shadow-md transition-all hover:shadow-lg"
+                            >
+                                🗑️ ลบที่เลือก ({selectedItems.length})
+                            </button>
+                        )}
+                        <button onClick={() => setShowForm(true)} className="px-6 py-3 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 shadow-md transition-all hover:shadow-lg">
+                            + บันทึกค่าใช้จ่าย
+                        </button>
+                    </div>
+                </div>
+            )}
+            {/* Modal ยืนยันการลบ */}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
+                        <h2 className="text-xl font-bold mb-4 text-red-700">ยืนยันการลบ</h2>
+                        <p className="mb-6">
+                            {itemToDelete 
+                                ? 'คุณแน่ใจหรือไม่ที่จะลบรายการนี้?' 
+                                : `คุณแน่ใจหรือไม่ที่จะลบ ${selectedItems.length} รายการที่เลือก?`}
+                            <br />
+                            <span className="text-red-500 font-semibold">การลบนี้ไม่สามารถย้อนกลับได้</span>
+                        </p>
+                        <div className="flex justify-end gap-4">
+                            <button onClick={() => { setShowDeleteConfirm(false); setItemToDelete(null); }} disabled={isClearing} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">ยกเลิก</button>
+                            <button onClick={handleDeleteSelected} disabled={isClearing} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">{isClearing ? 'กำลังลบ...' : 'ยืนยันลบ'}</button>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -235,6 +318,14 @@ export default function MaintenancePage() {
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
+                                <th className="px-4 py-3 text-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedItems.length === allRecords.length && allRecords.length > 0}
+                                        onChange={handleSelectAll}
+                                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">วันที่/เวลา</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">หมวดค่าใช้จ่าย</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ชื่ออู่/ผู้ให้บริการ</th>
@@ -245,10 +336,10 @@ export default function MaintenancePage() {
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {allRecords.length > 0 ? (
-                                allRecords.map(record => <MaintenanceRecord key={record.id} record={record} />)
+                                allRecords.map(record => <MaintenanceRecord key={record.id} record={record} onSelect={handleSelectItem} isSelected={selectedItems.includes(record.id)} />)
                             ) : (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">ยังไม่มีประวัติการซ่อมบำรุง</td>
+                                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">ยังไม่มีประวัติการซ่อมบำรุง</td>
                                 </tr>
                             )}
                         </tbody>

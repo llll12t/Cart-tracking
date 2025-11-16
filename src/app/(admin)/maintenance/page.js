@@ -97,7 +97,20 @@ export default function AdminMaintenanceQueue() {
     setShowSendModal(true);
     try {
       const snaps = await getDocs(collection(db, 'vehicles'));
-      const list = snaps.docs.map(d => ({ id: d.id, ...d.data() })).filter(v => v.status !== 'maintenance');
+      // Debug: log all vehicles and their status
+      const allVehicles = snaps.docs.map(d => ({ id: d.id, ...d.data() }));
+      console.log('All vehicles:', allVehicles.map(v => ({ id: v.id, status: v.status })));
+      const notAllowedStatuses = [
+        'maintenance',
+        'in_use',
+        'using',
+        'on_trip',
+        'busy',
+        'reserved',
+        'pending_approval',
+        'unavailable',
+      ];
+      const list = allVehicles.filter(v => !notAllowedStatuses.includes((v.status || '').toLowerCase()));
       setVehiclesList(list);
       if (list.length) {
         setSendVehicleId(list[0].id);
@@ -140,6 +153,29 @@ export default function AdminMaintenanceQueue() {
 
         tx.update(vehicleRef, { status: 'maintenance', lastMaintenanceId: maintRef.id });
       });
+
+      // รีเฟรช vehiclesList ใหม่ทันที (ถ้ายังเปิด modal อยู่)
+      const snaps = await getDocs(collection(db, 'vehicles'));
+      const allVehicles = snaps.docs.map(d => ({ id: d.id, ...d.data() }));
+      const notAllowedStatuses = [
+        'maintenance',
+        'in_use',
+        'using',
+        'on_trip',
+        'busy',
+        'reserved',
+        'pending_approval',
+        'unavailable',
+      ];
+      const list = allVehicles.filter(v => !notAllowedStatuses.includes((v.status || '').toLowerCase()));
+      setVehiclesList(list);
+      if (list.length) {
+        setSendVehicleId(list[0].id);
+        setSendMileage(list[0].currentMileage ?? '');
+      } else {
+        setSendVehicleId('');
+        setSendMileage('');
+      }
 
       closeSendModal();
     } catch (err) {

@@ -119,7 +119,7 @@ export default function AddVehiclePage() {
           type: 'fluid',
           amount: costNum,
           mileage: mileageNum,
-          note: `${initFluid.note || 'ตั้งค่าเริ่มต้น'})`,
+          note: `${initFluid.note || 'ตั้งค่าเริ่มต้น'}`,
           timestamp: new Date(initFluid.date),
           createdAt: serverTimestamp(),
           fluidType: initFluid.fluidType
@@ -146,7 +146,7 @@ export default function AddVehiclePage() {
                 <select name="status" value={form.status || "active"} onChange={handleChange} className="w-full p-3 border rounded-md">
                   <option value="active">พร้อมใช้งาน</option>
                   <option value="maintenance">ซ่อมบำรุง</option>
-                  <option value="inactive">ไม่พร้อมใช้งาน</option>
+                  <option value="retired">ไม่พร้อมใช้งาน</option>
                 </select>
               </div>
               <div>
@@ -259,7 +259,11 @@ export default function AddVehiclePage() {
           <aside className="flex flex-col items-center gap-4">
             <div className="w-full">
               <label className="block mb-2 text-sm font-medium">รูปรถ</label>
-              <div className="w-full bg-gray-50 rounded-lg border p-3 flex items-center justify-center">
+              <div
+                className="w-full bg-gray-50 rounded-lg border p-3 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-blue-400"
+                onClick={() => document.getElementById('vehicle-image-input')?.click()}
+                title="คลิกเพื่ออัพโหลดรูปใหม่"
+              >
                 {form.imageUrl ? (
                   !imageBroken ? (
                     <Image
@@ -278,7 +282,13 @@ export default function AddVehiclePage() {
                   <div className="w-full h-44 bg-gray-100 flex items-center justify-center rounded text-gray-400">ไม่มีรูป</div>
                 )}
               </div>
-              <input type="file" accept="image/*" onChange={handleImageChange} className="mt-3 w-full" />
+              <input
+                id="vehicle-image-input"
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="hidden"
+              />
               <div className="mt-3 flex gap-2">
                 <input value={imageUrlInput} onChange={(e) => setImageUrlInput(e.target.value)} placeholder="วางลิงก์รูปที่นี่" className="flex-1 p-2 border rounded" />
                 <button type="button" onClick={applyImageUrl} className="px-3 py-2 bg-blue-600 text-white rounded">ใช้ลิงก์</button>

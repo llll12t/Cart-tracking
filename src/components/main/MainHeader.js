@@ -23,7 +23,7 @@ export default function MainHeader({ userProfile, activeTab, setActiveTab }) {
     <div className="gradient-bg px-6 pt-8 pb-24">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full overflow-hidden border">
+          <div className="w-14 h-14 rounded-md overflow-hidden border border-white">
             {userProfile?.imageUrl || userProfile?.photoURL ? (
               <Image
                 src={userProfile.imageUrl || userProfile.photoURL}

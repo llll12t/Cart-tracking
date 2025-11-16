@@ -7,7 +7,7 @@ import { doc, getDoc, collection, query, where, onSnapshot, orderBy } from 'fire
 import AddFuelLogForm from '@/components/admin/AddFuelLogForm';
 import Image from 'next/image';
 
-function FuelRecord({ record }) {
+function FuelRecord({ record, onSelect, isSelected }) {
     const formatDateTime = (timestamp) => {
         if (!timestamp) return '-';
         let dateObj;
@@ -43,7 +43,7 @@ function FuelRecord({ record }) {
                     const snap = await getDoc(userRef);
                     if (snap.exists()) {
                         const data = snap.data();
-                        setUserName(data.displayName || data.name || data.fullName || '-');
+                        setUserName(data.name || data.fullName || '-');
                         return;
                     }
                     // ถ้าไม่เจอ ให้ค้น users ที่ lineId ตรงกับ userId
@@ -51,7 +51,7 @@ function FuelRecord({ record }) {
                     const qSnap = await getDocs(q);
                     if (!qSnap.empty) {
                         const data = qSnap.docs[0].data();
-                        setUserName(data.displayName || data.name || data.fullName || '-');
+                        setUserName(data.name || data.fullName || '-');
                         return;
                     }
                     setUserName('-');
@@ -67,6 +67,14 @@ function FuelRecord({ record }) {
 
     return (
         <tr className="hover:bg-gray-50">
+            <td className="px-4 py-3 text-center">
+                <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onSelect(record.id)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                />
+            </td>
             <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{formatDateTime(record.date)}</td>
             <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{userName}</td>
             <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{record.mileage ? record.mileage.toLocaleString() + ' กม.' : '-'}</td>
@@ -85,6 +93,9 @@ export default function FuelPage() {
     const [showForm, setShowForm] = useState(false);
     const [lastMileage, setLastMileage] = useState(null);
     const [isReloading, setIsReloading] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [selectedItems, setSelectedItems] = useState([]);
+    const [itemToDelete, setItemToDelete] = useState(null);
     
     // Pagination and Filter states
     const [currentPage, setCurrentPage] = useState(1);
@@ -241,6 +252,48 @@ export default function FuelPage() {
         return pages;
     };
 
+    const handleDeleteSelected = async () => {
+        setShowDeleteConfirm(false);
+        setIsReloading(true);
+        try {
+            const { deleteDoc, doc: docRef } = await import('firebase/firestore');
+            const idsToDelete = itemToDelete ? [itemToDelete] : selectedItems;
+            // Delete selected items (only from expenses, not fuel_logs)
+            const deletePromises = idsToDelete.map(id => {
+                // Only allow delete for expenses (not fuel_logs)
+                const found = allFuelRecords.find(r => r.id === id);
+                if (found && found.source === 'expenses') {
+                    return deleteDoc(docRef(db, 'expenses', id));
+                }
+                return Promise.resolve();
+            });
+            await Promise.all(deletePromises);
+            setSelectedItems([]);
+            setItemToDelete(null);
+            setIsReloading(false);
+        } catch (error) {
+            console.error('Error deleting fuel records:', error);
+            alert('เกิดข้อผิดพลาดในการลบ');
+            setIsReloading(false);
+        }
+    };
+
+    const handleSelectAll = () => {
+        // Only select expenses (not fuel_logs)
+        const expenseIds = currentRecords.filter(r => r.source === 'expenses').map(r => r.id);
+        if (selectedItems.length === expenseIds.length) {
+            setSelectedItems([]);
+        } else {
+            setSelectedItems(expenseIds);
+        }
+    };
+
+    const handleSelectItem = (id) => {
+        setSelectedItems(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
     if (loading) return <p>Loading fuel logs...</p>;
 
     return (
@@ -259,9 +312,19 @@ export default function FuelPage() {
                             )}
                         </div>
                     </div>
-                    <button onClick={() => setShowForm(true)} className="px-4 py-2 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700">
-                        + เพิ่มรายการเติมน้ำมัน
-                    </button>
+                    <div className="flex gap-2">
+                        {selectedItems.length > 0 && (
+                            <button 
+                                onClick={() => { setItemToDelete(null); setShowDeleteConfirm(true); }} 
+                                className="px-4 py-2 font-bold text-white bg-red-600 rounded-lg hover:bg-red-700"
+                            >
+                                🗑️ ลบที่เลือก ({selectedItems.length})
+                            </button>
+                        )}
+                        <button onClick={() => setShowForm(true)} className="px-4 py-2 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700">
+                            + เพิ่มรายการเติมน้ำมัน
+                        </button>
+                    </div>
                 </div>
             )}
             
@@ -369,6 +432,14 @@ export default function FuelPage() {
                     <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                             <tr>
+                                <th className="px-4 py-3 text-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedItems.length === currentRecords.filter(r => r.source === 'expenses').length && currentRecords.filter(r => r.source === 'expenses').length > 0}
+                                        onChange={handleSelectAll}
+                                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">วันที่/เวลา</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ผู้เติม</th>
                                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">เลขไมล์ที่เติม</th>
@@ -378,10 +449,10 @@ export default function FuelPage() {
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {currentRecords.length > 0 ? (
-                                currentRecords.map(log => <FuelRecord key={log.id} record={log} />)
+                                currentRecords.map(log => <FuelRecord key={log.id} record={log} onSelect={handleSelectItem} isSelected={selectedItems.includes(log.id)} />)
                             ) : (
                                 <tr>
-                                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                                         {allFuelRecords.length === 0 ? 'ยังไม่มีประวัติการเติมน้ำมัน' : 'ไม่พบรายการที่ตรงกับเงื่อนไขการค้นหา'}
                                     </td>
                                 </tr>
@@ -478,6 +549,35 @@ export default function FuelPage() {
                     }, 300);
                 }
             }} />}
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="bg-white rounded-lg p-6 max-w-md mx-4">
+                        <h3 className="text-xl font-bold text-gray-900 mb-4">⚠️ ยืนยันการลบ</h3>
+                        <p className="text-gray-700 mb-6">
+                            {itemToDelete 
+                                ? 'คุณแน่ใจหรือไม่ที่จะลบรายการนี้?' 
+                                : `คุณแน่ใจหรือไม่ที่จะลบ ${selectedItems.length} รายการที่เลือก?`
+                            }
+                            <br />
+                            <span className="text-red-500 font-semibold">การกระทำนี้ไม่สามารถย้อนกลับได้</span>
+                        </p>
+                        <div className="flex justify-end gap-4">
+                            <button 
+                                onClick={() => { setShowDeleteConfirm(false); setItemToDelete(null); }} 
+                                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            >
+                                ยกเลิก
+                            </button>
+                            <button 
+                                onClick={handleDeleteSelected} 
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                            >
+                                ยืนยันลบ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {isReloading && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
                     <div className="text-center">

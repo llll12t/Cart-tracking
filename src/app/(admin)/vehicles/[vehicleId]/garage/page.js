@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDoc, deleteDoc } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
 
-function GarageRecord({ record }) {
+function GarageRecord({ record, selected, onSelect, onDelete }) {
   const formatDateTime = (value) => {
     if (!value) return '-';
     let dateObj;
@@ -54,6 +54,11 @@ function GarageRecord({ record }) {
 
   return (
     <tr className="hover:bg-gray-50">
+      <td className="px-2 py-3 text-center">
+        {record.source === 'maintenances' && (
+          <input type="checkbox" checked={!!selected} onChange={e => onSelect(record.id, e.target.checked)} />
+        )}
+      </td>
       <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{formatDateTime(record.createdAt)}</td>
       <td className="px-4 py-3 text-sm text-gray-900">{record.vendor ?? '-'}</td>
       <td className="px-4 py-3 text-sm text-gray-900">{record.details ?? '-'}</td>
@@ -65,6 +70,9 @@ function GarageRecord({ record }) {
             {translateStatus(record.maintenanceStatus)}
           </span>
           {sourceBadge}
+          {record.source === 'maintenances' && (
+            <button onClick={() => onDelete(record.id)} className="ml-2 px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200">ลบ</button>
+          )}
         </div>
       </td>
     </tr>
@@ -72,6 +80,43 @@ function GarageRecord({ record }) {
 }
 
 export default function VehicleGaragePage() {
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteTargetIds, setDeleteTargetIds] = useState([]);
+    const [deleting, setDeleting] = useState(false);
+    // เลือก/ยกเลิกเลือกแต่ละรายการ
+    const handleSelect = (id, checked) => {
+      setSelectedIds(prev => checked ? [...prev, id] : prev.filter(x => x !== id));
+    };
+
+    // ลบทีละรายการ (ปุ่มลบในแถว)
+    const handleDeleteSingle = (id) => {
+      setDeleteTargetIds([id]);
+      setShowDeleteModal(true);
+    };
+
+    // ลบหลายรายการ (ปุ่มลบที่หัวตาราง)
+    const handleDeleteMultiple = () => {
+      if (selectedIds.length === 0) return;
+      setDeleteTargetIds(selectedIds);
+      setShowDeleteModal(true);
+    };
+
+    // ดำเนินการลบจริง
+    const confirmDelete = async () => {
+      setDeleting(true);
+      try {
+        for (const id of deleteTargetIds) {
+          await deleteDoc(doc(db, 'maintenances', id));
+        }
+        setSelectedIds([]);
+        setDeleteTargetIds([]);
+        setShowDeleteModal(false);
+      } catch (e) {
+        alert('เกิดข้อผิดพลาดในการลบ');
+      }
+      setDeleting(false);
+    };
   const params = useParams();
   const vehicleId = params?.vehicleId;
   const [vehicle, setVehicle] = useState(null);
@@ -207,9 +252,20 @@ export default function VehicleGaragePage() {
           </div>
         )}
         <div className="bg-white rounded-lg shadow overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+          <div className="flex items-center justify-between px-4 pt-4">
+            <div />
+            <button
+              className="px-3 py-1 bg-red-600 text-white rounded text-sm disabled:opacity-50"
+              disabled={selectedIds.length === 0}
+              onClick={handleDeleteMultiple}
+            >
+              ลบที่เลือก ({selectedIds.length})
+            </button>
+          </div>
+          <table className="min-w-full divide-y divide-gray-200 mt-2">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase w-8"></th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">วันที่/เวลา</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">อู่/ผู้ให้บริการ</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">รายละเอียด</th>
@@ -220,16 +276,38 @@ export default function VehicleGaragePage() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {allItems.length > 0 ? (
-                allItems.map(rec => <GarageRecord key={rec.id} record={rec} />)
+                allItems.map(rec => (
+                  <GarageRecord
+                    key={rec.id}
+                    record={rec}
+                    selected={selectedIds.includes(rec.id)}
+                    onSelect={handleSelect}
+                    onDelete={handleDeleteSingle}
+                  />
+                ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">ยังไม่มีบันทึกการส่งซ่อมสำหรับคันนี้</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">ยังไม่มีบันทึกการส่งซ่อมสำหรับคันนี้</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Modal ยืนยันการลบ */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="w-full max-w-md p-6 bg-white rounded shadow">
+            <h3 className="text-lg font-semibold mb-3">ยืนยันการลบ</h3>
+            <p className="mb-4">คุณต้องการลบ {deleteTargetIds.length} รายการหรือไม่?</p>
+            <div className="flex justify-end gap-3 mt-4">
+              <button onClick={() => setShowDeleteModal(false)} className="px-4 py-2 bg-gray-200 rounded">ยกเลิก</button>
+              <button onClick={confirmDelete} disabled={deleting} className="px-4 py-2 bg-red-600 text-white rounded">{deleting ? 'กำลังลบ...' : 'ลบ'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
