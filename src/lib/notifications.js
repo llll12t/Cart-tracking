@@ -175,20 +175,9 @@ export async function sendNotificationsForEvent(event, booking) {
         }
       }
     } else if (event === 'vehicle_borrowed') {
-      // For vehicle_borrowed: notify admins + the borrower
+      // For vehicle_borrowed: notify admins only (borrower will get direct notification)
       const adminSnaps = await db.collection('users').where('role', '==', 'admin').get();
       recipientDocs.push(...adminSnaps.docs);
-      
-      // Add the borrower (person who borrowed the vehicle)
-      const borrowerId = fullBooking.userId || fullBooking.requesterId;
-      if (borrowerId) {
-        try {
-          const borrowerDoc = await db.collection('users').doc(borrowerId).get();
-          if (borrowerDoc.exists) recipientDocs.push(borrowerDoc);
-        } catch (e) {
-          console.warn('Failed to fetch borrower user for notifications', borrowerId, e);
-        }
-      }
       
       // Set templates for vehicle_borrowed using usage data
       const usageDataBorrowed = b; // Use normalized booking data
@@ -197,19 +186,9 @@ export async function sendNotificationsForEvent(event, booking) {
       templates.driver.vehicle_borrowed = vehicleBorrowedFlex(usageDataBorrowed);
       templates.employee.vehicle_borrowed = vehicleBorrowedFlex(usageDataBorrowed);
     } else if (event === 'vehicle_returned') {
-      // For vehicle_returned: notify admins + the returning driver
+      // For vehicle_returned: notify admins only (returning user will get direct notification)
       const adminSnaps = await db.collection('users').where('role', '==', 'admin').get();
       recipientDocs.push(...adminSnaps.docs);
-      
-      // returning driver (if assigned)
-      if (fullBooking && fullBooking.userId) {
-        try {
-          const drv = await db.collection('users').doc(fullBooking.userId).get();
-          if (drv.exists) recipientDocs.push(drv);
-        } catch (e) {
-          console.warn('Failed to fetch user for notifications', fullBooking.userId, e);
-        }
-      }
       
       // Set templates for vehicle_returned using usage data
       const usageDataReturned = b; // Use normalized booking data
@@ -266,8 +245,84 @@ export async function sendNotificationsForEvent(event, booking) {
     throw e;
   }
 
+  // ส่งแจ้งเตือนไปหาผู้ใช้รถ/ผู้ยืมรถโดยตรงก่อน (ตรวจสอบ role settings)
+  const directNotifyUserId = fullBooking?.userId;
+  console.log(`🔍 Direct notification check: userId=${directNotifyUserId}, event=${event}`);
+  
+  if (directNotifyUserId && (event === 'vehicle_borrowed' || event === 'vehicle_returned')) {
+    console.log(`📤 Attempting direct notification to userId=${directNotifyUserId} for ${event}`);
+    try {
+      // userId อาจเป็น LINE ID หรือ Firestore document ID ลองทั้งสองวิธี
+      let userDoc = await db.collection('users').doc(directNotifyUserId).get();
+      let userData = null;
+      let userDocId = directNotifyUserId;
+      
+      if (userDoc.exists) {
+        userData = userDoc.data();
+        console.log(`👤 Found user by document ID: ${directNotifyUserId}`);
+      } else {
+        // ถ้าไม่เจอ ให้ลอง query by lineId
+        console.log(`🔎 Not found by doc ID, trying lineId query...`);
+        const userQuery = await db.collection('users').where('lineId', '==', directNotifyUserId).limit(1).get();
+        if (!userQuery.empty) {
+          userDoc = userQuery.docs[0];
+          userData = userDoc.data();
+          userDocId = userDoc.id;
+          console.log(`👤 Found user by lineId: docId=${userDocId}, lineId=${directNotifyUserId}`);
+        }
+      }
+      
+      if (userData) {
+        const userLineId = userData?.lineId || directNotifyUserId; // fallback to directNotifyUserId if it's the LINE ID
+        const userRole = userData?.role || 'driver';
+        
+        console.log(`👤 User details: lineId=${userLineId}, role=${userRole}`);
+        
+        // ตรวจสอบ settings ของ role นี้ว่าเปิดการแจ้งเตือนหรือไม่
+        const roleSettings = (notifSettings.roles && notifSettings.roles[userRole]) || {};
+        const enabled = typeof roleSettings[event] === 'boolean' ? roleSettings[event] : true;
+        
+        console.log(`🔔 Notification enabled for role ${userRole}: ${enabled}`);
+        
+        if (!enabled) {
+          console.log(`⏭️ Skipping direct notification - ${userRole} has disabled ${event} notifications`);
+          results.skipped.push({ uid: userDocId, reason: 'setting_disabled_direct', role: userRole });
+        } else if (userLineId) {
+          // ใช้ template ตาม role ของผู้ใช้ หรือ fallback เป็น driver
+          const msgToSend = templates[userRole]?.[event] || templates.driver?.[event];
+          
+          console.log(`📝 Message template exists: ${!!msgToSend}`);
+          
+          if (msgToSend) {
+            try {
+              const messages = [{ type: 'flex', altText: msgToSend.altText || '', contents: msgToSend.contents }];
+              await sendPushMessage(userLineId, messages);
+              results.sent.push({ uid: userDocId, lineId: userLineId, direct: true });
+              console.log(`✅ Sent direct notification to userId=${userDocId} lineId=${userLineId} (${event})`);
+            } catch (err) {
+              console.error('❌ Error sending direct notification to user', userDocId, err);
+              const errBody = err && err.body ? err.body : String(err);
+              results.errors.push({ uid: userDocId, lineId: userLineId, error: errBody, direct: true });
+            }
+          } else {
+            console.warn(`⚠️ No message template for direct notification to user role=${userRole} event=${event}`);
+          }
+        } else {
+          console.warn(`⚠️ User ${userDocId} has no lineId for direct notification`);
+        }
+      } else {
+        console.warn(`⚠️ User ${directNotifyUserId} not found in database (tried both doc ID and lineId)`);
+      }
+    } catch (err) {
+      console.error('❌ Error sending direct notification to userId', directNotifyUserId, err);
+    }
+  }
+
   // dedupe recipients by uid
   const seen = new Set();
+  // เพิ่ม userId ที่ส่งไปแล้วใน seen เพื่อไม่ส่งซ้ำ
+  if (directNotifyUserId) seen.add(directNotifyUserId);
+  
   for (const doc of recipientDocs) {
     const ud = doc.data();
     const lineId = ud?.lineId;

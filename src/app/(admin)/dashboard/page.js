@@ -66,19 +66,31 @@ function AlertList({ title, items, type }) {
             <h3 className="font-bold text-lg mb-4">{title}</h3>
             <ul className="space-y-3">
                 {items.length > 0 ? items.map(item => (
-                    <li key={item.id} className="flex justify-between items-center text-sm">
-                        <span>
-                          {item.brand} {item.model} ({item.licensePlate})
-                          <span className="ml-2 text-xs text-gray-500">เลขไมล์ล่าสุด: {item.currentMileage?.toLocaleString?.() ?? '-'}</span>
-                        </span>
-                        <span className={`font-semibold ${textColor}`}>
-                            {type === 'fluidChange' 
-                                ? item.lastFluidMileage === undefined || item.lastFluidMileage === null
-                                    ? 'ยังไม่ระบุ'
-                                    : `เหลืออีก ${(10000 - item.mileageSinceLastChange).toLocaleString()} กม.`
-                                : `หมดอายุ: ${formatDate(type === 'tax' ? item.taxDueDate : item.insuranceExpireDate)}`
-                            }
-                        </span>
+                    <li key={item.id} className="text-sm">
+                        <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                                <div className="font-medium text-gray-900">
+                                    {item.brand} {item.model} ({item.licensePlate})
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                    เลขไมล์ล่าสุด: {item.currentMileage?.toLocaleString?.() ?? '-'} กม.
+                                </div>
+                            </div>
+                            <span className={`font-semibold ml-4 ${
+                                type === 'fluidChange' && item.mileageSinceLastChange >= 10000 
+                                    ? 'text-red-600' 
+                                    : textColor
+                            }`}>
+                                {type === 'fluidChange' 
+                                    ? item.lastFluidMileage === undefined || item.lastFluidMileage === null
+                                        ? 'ยังไม่ระบุ'
+                                        : item.mileageSinceLastChange >= 10000
+                                            ? `เลยกำหนด ${(item.mileageSinceLastChange - 10000).toLocaleString()} กม.`
+                                            : `เหลืออีก ${(10000 - item.mileageSinceLastChange).toLocaleString()} กม.`
+                                    : `หมดอายุ: ${formatDate(type === 'tax' ? item.taxDueDate : item.insuranceExpireDate)}`
+                                }
+                            </span>
+                        </div>
                     </li>
                 )) : <p className="text-sm text-gray-500">ไม่มีรายการแจ้งเตือน</p>}
             </ul>

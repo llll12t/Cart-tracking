@@ -128,11 +128,16 @@ export default function MyVehiclePage() {
 
             setReturnMessage("ส่งคืนรถสำเร็จ!");
             setTimeout(() => {
-                setShowReturnModal(false);
-                setActiveUsage(null);
-                setVehicle(null);
-                setExpenses([]);
-                router.push('/vehicle-selection');
+                // Try to close LIFF if available
+                if (typeof window !== 'undefined' && window.liff && typeof window.liff.close === 'function') {
+                    window.liff.close();
+                } else {
+                    setShowReturnModal(false);
+                    setActiveUsage(null);
+                    setVehicle(null);
+                    setExpenses([]);
+                    router.push('/vehicle-selection');
+                }
             }, 1500);
 
         } catch (error) {
