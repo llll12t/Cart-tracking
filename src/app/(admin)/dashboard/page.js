@@ -1,353 +1,461 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
-import Link from 'next/link';
+import { useState, useEffect, useMemo } from 'react';
+import { db } from '@/app/lib/firebase';
+import { collection, query, orderBy, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
+import { navigateToDetail } from '@/lib/navigateToDetail';
+import Image from 'next/image';
+import { cancelAppointmentByAdmin } from '@/app/actions/appointmentActions';
+import { format, startOfDay, endOfDay, parseISO } from 'date-fns';
+import { th } from 'date-fns/locale';
+import { useProfile } from '@/context/ProfileProvider';
 
-// Component สำหรับแสดง Card สรุปข้อมูล
-function StatCard({ title, value, icon, link }) {
+// --- Modal Component (No Changes) ---
+function CancelAppointmentModal({ appointment, onClose, onConfirm }) {
+    const [reason, setReason] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const handleSubmit = async () => {
+        if (!reason.trim()) { alert('กรุณาระบุเหตุผลการยกเลิก'); return; }
+        setIsSubmitting(true);
+        await onConfirm(appointment.id, reason);
+        setIsSubmitting(false);
+        onClose();
+    };
     return (
-        <Link href={link || '#'} className="block p-6 bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow">
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
+            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+                <h2 className="text-xl font-bold mb-2 text-gray-800">ยืนยันการยกเลิกนัดหมาย</h2>
+                <p className="text-sm text-gray-600 mb-4">คุณต้องการยกเลิกการนัดหมายของ <span className="font-semibold">{appointment.customerInfo.name}</span> (ID: {appointment.id.substring(0, 6).toUpperCase()}) ใช่หรือไม่?</p>
                 <div>
-                    <p className="text-sm font-medium text-gray-500">{title}</p>
-                    <p className="text-3xl font-bold text-gray-900">{value}</p>
+                    <label htmlFor="cancellationReason" className="block text-sm font-medium text-gray-700">เหตุผลการยกเลิก <span className="text-red-500">*</span></label>
+                    <textarea id="cancellationReason" rows="3" value={reason} onChange={(e) => setReason(e.target.value)} className="w-full mt-1 p-2 border rounded-md" placeholder="เช่น ลูกค้าขอเลื่อนนัด"></textarea>
                 </div>
-                <div className="text-4xl text-indigo-500">{icon}</div>
+                <div className="flex justify-end space-x-3 mt-5">
+                    <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-md font-semibold">ปิด</button>
+                    <button type="button" onClick={handleSubmit} disabled={isSubmitting} className="px-4 py-2 bg-red-600 text-white rounded-md font-semibold disabled:bg-gray-400">{isSubmitting ? 'กำลังยกเลิก...' : 'ยืนยัน'}</button>
+                </div>
             </div>
-        </Link>
-    );
-}
-
-
-// Utility functions (top-level)
-const formatDate = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    try {
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return date.toLocaleDateString('th-TH');
-    } catch (e) {
-        return 'N/A';
-    }
-};
-
-const formatDateTime = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    try {
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return date.toLocaleString('th-TH', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    } catch (e) {
-        return 'N/A';
-    }
-};
-
-const getExpenseType = (type) => {
-    switch (type) {
-        case 'fuel': return '⛽ น้ำมัน';
-        case 'fluid': return '🛢️ เปลี่ยนของเหลว';
-        case 'other': return '💰 อื่นๆ';
-        default: return type;
-    }
-};
-
-// Component สำหรับแสดงรายการแจ้งเตือน
-function AlertList({ title, items, type }) {
-    const textColor = type === 'tax' ? 'text-red-600' : type === 'insurance' ? 'text-orange-600' : 'text-blue-600';
-
-    return (
-        <div className="p-6 bg-white rounded-lg shadow-md">
-            <h3 className="font-bold text-lg mb-4">{title}</h3>
-            <ul className="space-y-3">
-                {items.length > 0 ? items.map(item => (
-                    <li key={item.id} className="text-sm">
-                        <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                                <div className="font-medium text-gray-900">
-                                    {item.brand} {item.model} ({item.licensePlate})
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
-                                    เลขไมล์ล่าสุด: {item.currentMileage?.toLocaleString?.() ?? '-'} กม.
-                                </div>
-                            </div>
-                            <span className={`font-semibold ml-4 ${
-                                type === 'fluidChange' && item.mileageSinceLastChange >= 10000 
-                                    ? 'text-red-600' 
-                                    : textColor
-                            }`}>
-                                {type === 'fluidChange' 
-                                    ? item.lastFluidMileage === undefined || item.lastFluidMileage === null
-                                        ? 'ยังไม่ระบุ'
-                                        : item.mileageSinceLastChange >= 10000
-                                            ? `เลยกำหนด ${(item.mileageSinceLastChange - 10000).toLocaleString()} กม.`
-                                            : `เหลืออีก ${(10000 - item.mileageSinceLastChange).toLocaleString()} กม.`
-                                    : `หมดอายุ: ${formatDate(type === 'tax' ? item.taxDueDate : item.insuranceExpireDate)}`
-                                }
-                            </span>
-                        </div>
-                    </li>
-                )) : <p className="text-sm text-gray-500">ไม่มีรายการแจ้งเตือน</p>}
-            </ul>
         </div>
     );
 }
 
-export default function AdminDashboardPage() {
-    const [stats, setStats] = useState({ available: 0, inUse: 0, maintenance: 0, totalUsage: 0 });
-    const [alerts, setAlerts] = useState({ tax: [], insurance: [], fluidChange: [] });
-    const [activeUsages, setActiveUsages] = useState([]);
-    const [recentExpenses, setRecentExpenses] = useState([]);
-    const [expenseVehicles, setExpenseVehicles] = useState({});
-    const [loading, setLoading] = useState(true);
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+// --- Status & Color Definitions ---
+const STATUSES = {
+    awaiting_confirmation: { label: 'รอยืนยัน', color: 'bg-yellow-100 text-yellow-800' },
+    confirmed: { label: 'ยืนยันแล้ว', color: 'bg-blue-100 text-blue-800' },
+    in_progress: { label: 'กำลังใช้บริการ', color: 'bg-purple-100 text-purple-800' },
+    completed: { label: 'เสร็จสิ้น', color: 'bg-green-100 text-green-800' },
+    cancelled: { label: 'ยกเลิก', color: 'bg-red-100 text-red-800' },
+};
 
-    useEffect(() => {
-        // ดึงข้อมูลสรุปสถานะรถ
-        const vehiclesQuery = query(collection(db, "vehicles"));
-        const activeUsageQuery = query(collection(db, "vehicle-usage"), where("status", "==", "active"));
-        const expensesQuery = query(collection(db, "expenses"));
-        
-        const unsubVehicles = onSnapshot(vehiclesQuery, async (snapshot) => {
-            let available = 0, inUse = 0, maintenance = 0;
-            let taxAlerts = [], insuranceAlerts = [], fluidChangeAlerts = [];
-            const thirtyDaysFromNow = Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+const TABS = [
+    { key: 'in_progress', label: 'กำลังใช้บริการ' },
+    { key: 'confirmed', label: 'ยืนยันแล้ว' },
+    { key: 'awaiting_confirmation', label: 'รอยืนยัน' },
+    { key: 'completed', label: 'เสร็จสิ้น' },
+    { key: 'cancelled', label: 'ยกเลิก' },
+];
 
-            // ดึงข้อมูล expenses ทั้งหมด (fuel, fluid, other) เพื่อหาเลขไมล์ล่าสุดของแต่ละคัน
-            const { getDocs } = await import('firebase/firestore');
-            const allExpensesSnapshot = await getDocs(collection(db, 'expenses'));
-            const fluidExpensesByVehicle = {};
-            const latestMileageByVehicle = {};
-            
-            allExpensesSnapshot.docs.forEach(doc => {
-                const exp = doc.data();
-                if (exp.vehicleId && exp.mileage) {
-                    // หา expense ที่เป็น fluid ล่าสุด
-                    if (exp.type === 'fluid') {
-                        if (!fluidExpensesByVehicle[exp.vehicleId] || exp.mileage > fluidExpensesByVehicle[exp.vehicleId].mileage) {
-                            fluidExpensesByVehicle[exp.vehicleId] = exp;
-                        }
-                    }
-                    // หาเลขไมล์ล่าสุดจาก expenses ทั้งหมด
-                    if (!latestMileageByVehicle[exp.vehicleId] || exp.mileage > latestMileageByVehicle[exp.vehicleId]) {
-                        latestMileageByVehicle[exp.vehicleId] = exp.mileage;
-                    }
-                }
-            });
+// --- Appointment Card Component ---
+const AppointmentCard = ({ appointment, onCancelClick }) => {
+    const { profile } = useProfile();
+    const mainDuration = appointment.serviceInfo?.duration || appointment.appointmentInfo?.duration || 0;
+    const addOns = appointment.appointmentInfo?.addOns || appointment.addOns || [];
+    const addOnsDuration = addOns.reduce((sum, addon) => sum + (addon.duration || 0), 0);
+    const totalDuration = mainDuration + addOnsDuration;
+    const router = useRouter();
+    const statusInfo = STATUSES[appointment.status] || { label: appointment.status, color: 'bg-gray-100 text-gray-800' };
+    const appointmentDate = appointment.appointmentInfo?.dateTime?.toDate();
 
-            snapshot.docs.forEach(doc => {
-                const vehicle = { id: doc.id, ...doc.data() };
-                if (vehicle.status === 'available') available++;
-                else if (vehicle.status === 'in-use' || vehicle.status === 'in_use') inUse++;
-                else if (vehicle.status === 'maintenance') maintenance++;
-
-                // เช็ควันหมดอายุ
-                if (vehicle.taxDueDate && vehicle.taxDueDate <= thirtyDaysFromNow) taxAlerts.push({ ...vehicle, currentMileage: latestMileageByVehicle[vehicle.id] || 0 });
-                if (vehicle.insuranceExpireDate && vehicle.insuranceExpireDate <= thirtyDaysFromNow) insuranceAlerts.push({ ...vehicle, currentMileage: latestMileageByVehicle[vehicle.id] || 0 });
-
-                // เช็คการเปลี่ยนของเหลว - เตือนเมื่อวิ่งครบ 10,000 กม. นับจากการเปลี่ยนครั้งล่าสุด
-                const lastFluidChange = fluidExpensesByVehicle[vehicle.id];
-                const currentMileage = latestMileageByVehicle[vehicle.id] || 0;
-                if (lastFluidChange) {
-                    const mileageSinceLastChange = currentMileage - lastFluidChange.mileage;
-                    // แจ้งเตือนเมื่อเหลือไม่ถึง 1,000 กม. ก่อนครบ 10,000 กม. (9,000-9,999)
-                    if (mileageSinceLastChange >= 9000) {
-                        fluidChangeAlerts.push({
-                            ...vehicle,
-                            lastFluidMileage: lastFluidChange.mileage,
-                            currentMileage,
-                            mileageSinceLastChange
-                        });
-                    }
-                } else if (currentMileage >= 9000) {
-                    // ถ้าไม่เคยเปลี่ยนเลย และไมล์ปัจจุบันครบ 9,000 ขึ้นไป
-                    fluidChangeAlerts.push({
-                        ...vehicle,
-                        lastFluidMileage: 0,
-                        currentMileage,
-                        mileageSinceLastChange: currentMileage
-                    });
-                }
-            });
-            
-            setStats(prev => ({ ...prev, available, inUse, maintenance }));
-            setAlerts({ tax: taxAlerts, insurance: insuranceAlerts, fluidChange: fluidChangeAlerts });
-        });
-
-        const unsubUsages = onSnapshot(activeUsageQuery, (snapshot) => {
-            const usages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setActiveUsages(usages);
-        });
-
-        const unsubExpenses = onSnapshot(expensesQuery, async (snapshot) => {
-            const expenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            // Sort by timestamp
-            expenses.sort((a, b) => {
-                const aTime = a.timestamp?.toDate?.() || new Date(a.timestamp);
-                const bTime = b.timestamp?.toDate?.() || new Date(b.timestamp);
-                return bTime - aTime;
-            });
-            setRecentExpenses(expenses);
-            // Fetch vehicle info for all expenses
-            const vehicleIds = Array.from(new Set(expenses.map(e => e.vehicleId).filter(Boolean)));
-            if (vehicleIds.length > 0) {
-                const { getDoc, doc } = await import('firebase/firestore');
-                const vehicleMap = {};
-                await Promise.all(vehicleIds.map(async (vid) => {
-                    try {
-                        const vSnap = await getDoc(doc(db, 'vehicles', vid));
-                        if (vSnap.exists()) vehicleMap[vid] = vSnap.data();
-                    } catch {}
-                }));
-                setExpenseVehicles(vehicleMap);
-            } else {
-                setExpenseVehicles({});
-            }
-        });
-
-        // Get total usage count
-        const usageQuery = query(collection(db, "vehicle-usage"));
-        const unsubTotalUsage = onSnapshot(usageQuery, (snapshot) => {
-            setStats(prev => ({ ...prev, totalUsage: snapshot.size }));
-        });
-
-        setLoading(false);
-        
-        return () => {
-            unsubVehicles();
-            unsubUsages();
-            unsubExpenses();
-            unsubTotalUsage();
-        };
-    }, []);
-
-    if (loading) return <p>Loading Dashboard...</p>;
-
-    // Pagination logic
-    const totalPages = Math.ceil(recentExpenses.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const currentExpenses = recentExpenses.slice(startIndex, endIndex);
-
-    const goToFirstPage = () => setCurrentPage(1);
-    const goToLastPage = () => setCurrentPage(totalPages);
-    const goToPrevPage = () => setCurrentPage(prev => Math.max(1, prev - 1));
-    const goToNextPage = () => setCurrentPage(prev => Math.min(totalPages, prev + 1));
+    // กำหนดสีขอบตามสถานะ
+    const borderColorClass = {
+        'awaiting_confirmation': 'border-l-yellow-500',
+        'confirmed': 'border-l-blue-500',
+        'in_progress': 'border-l-purple-500',
+        'completed': 'border-l-green-500',
+        'cancelled': 'border-l-red-500',
+    }[appointment.status] || 'border-l-gray-300';
 
     return (
-        <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard ภาพรวม</h1>
-            {/* ส่วนแสดงข้อมูลสรุป */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="รถว่าง" value={stats.available} icon="✅" link="/vehicles" />
-                <StatCard title="กำลังใช้งาน" value={stats.inUse} icon="🚗" link="/vehicles/in-use" />
-                <StatCard title="ซ่อมบำรุง" value={stats.maintenance} icon="🔧" link="/maintenance" />
-                <StatCard title="ประวัติทั้งหมด" value={stats.totalUsage} icon="📊" link="/trip-history" />
+        <div className={`bg-white rounded-lg shadow-sm border-l-4 ${borderColorClass} border-t border-r border-b p-4 space-y-3 text-sm hover:shadow-md transition-shadow`}>
+            <div className="flex justify-between items-start">
+                <div>
+                    <p className="font-bold text-gray-800 text-base">{appointment.customerInfo?.fullName || appointment.customerInfo?.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{appointment.customerInfo?.phone}</p>
+                </div>
+                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${statusInfo.color}`}>{statusInfo.label}</span>
             </div>
 
-            {/* ส่วนแจ้งเตือน */}
-            <div className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <AlertList title="ภาษีรถยนต์จะหมดอายุใน 30 วัน" items={alerts.tax} type="tax" />
-                <AlertList title="ประกันรถยนต์จะหมดอายุใน 30 วัน" items={alerts.insurance} type="insurance" />
-                <AlertList title="ใกล้ครบกำหนดเปลี่ยนของเหลว (10,000 กม.)" items={alerts.fluidChange} type="fluidChange" />
-            </div>
-
-            {/* ค่าใช้จ่ายล่าสุด */}
-            {recentExpenses.length > 0 && (
-                <div className="mt-10">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">ค่าใช้จ่ายล่าสุด</h2>
-                    <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ทะเบียน</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ประเภท</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เลขไมล์</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จำนวนเงิน</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">หมายเหตุ</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {currentExpenses.map(expense => {
-                                        const vehicle = expenseVehicles[expense.vehicleId];
-                                        return (
-                                            <tr key={expense.id} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {formatDateTime(expense.timestamp)}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {vehicle?.licensePlate || '-'}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {getExpenseType(expense.type)}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                                    {expense.mileage ? `${expense.mileage.toLocaleString()} กม.` : '-'}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-teal-600">
-                                                    {expense.amount?.toLocaleString()} ฿
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-gray-500">
-                                                    {expense.note || '-'}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                        {/* Pagination controls */}
-                        {totalPages > 1 && (
-                            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
-                                <div className="text-sm text-gray-700">
-                                    แสดง {startIndex + 1}-{Math.min(endIndex, recentExpenses.length)} จาก {recentExpenses.length} รายการ
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={goToFirstPage}
-                                        disabled={currentPage === 1}
-                                        className="px-3 py-1 bg-white border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-                                    >
-                                        หน้าแรก
-                                    </button>
-                                    <button
-                                        onClick={goToPrevPage}
-                                        disabled={currentPage === 1}
-                                        className="px-3 py-1 bg-white border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-                                    >
-                                        ก่อนหน้า
-                                    </button>
-                                    <span className="px-3 py-1 text-sm">
-                                        หน้า {currentPage} / {totalPages}
-                                    </span>
-                                    <button
-                                        onClick={goToNextPage}
-                                        disabled={currentPage === totalPages}
-                                        className="px-3 py-1 bg-white border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-                                    >
-                                        ถัดไป
-                                    </button>
-                                    <button
-                                        onClick={goToLastPage}
-                                        disabled={currentPage === totalPages}
-                                        className="px-3 py-1 bg-white border rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-                                    >
-                                        หน้าสุดท้าย
-                                    </button>
-                                </div>
+            {/* Service Info */}
+            <div className="border-t pt-3">
+                <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                        <p className="font-semibold text-gray-800">{appointment.serviceInfo?.name}</p>
+                        
+                        {/* Multi-area service details */}
+                        {appointment.serviceInfo?.serviceType === 'multi-area' && (
+                            <div className="mt-1 space-y-1">
+                                {appointment.serviceInfo?.selectedArea && (
+                                    <div className="flex items-center gap-1 text-xs">
+                                        <span className="font-medium text-primary">{appointment.serviceInfo.selectedArea.name}</span>
+                                    </div>
+                                )}
+                                {appointment.serviceInfo?.selectedPackage && (
+                                    <div className="flex items-center gap-1 text-xs text-gray-600">
+                                        <span>{appointment.serviceInfo.selectedPackage.duration} นาที</span>
+                                        <span className="text-gray-400">•</span>
+                                        <span className="font-medium">{appointment.serviceInfo.selectedPackage.price.toLocaleString()} {profile.currencySymbol}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        
+                        {/* Single service details */}
+                        {appointment.serviceInfo?.serviceType !== 'multi-area' && (
+                            <div className="flex items-center gap-2 text-xs text-gray-600 mt-1">
+                                {(appointment.serviceInfo?.duration || appointment.appointmentInfo?.duration) && (
+                                    <>
+                                        <span>{appointment.serviceInfo?.duration || appointment.appointmentInfo?.duration} นาที</span>
+                                        <span className="text-gray-400">•</span>
+                                    </>
+                                )}
+                                <span className="font-medium">{(appointment.serviceInfo?.price || appointment.appointmentInfo?.price || 0).toLocaleString()} {profile.currencySymbol}</span>
                             </div>
                         )}
                     </div>
+                </div>
+            </div>
+
+            {/* Add-ons */}
+            {addOns.length > 0 && (
+                <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                    <div className="flex items-center gap-1 text-xs font-semibold text-blue-800 mb-2">
+                        <span>บริการเสริม</span>
+                    </div>
+                    <ul className="space-y-1">
+                        {addOns.map((addon, idx) => (
+                            <li key={idx} className="flex justify-between text-xs text-blue-900">
+                                <span className="flex items-center gap-1">
+                                    <span className="w-1 h-1 bg-blue-400 rounded-full"></span>
+                                    {addon.name || addon.title || 'ไม่มีชื่อ'}
+                                </span>
+                                <span className="font-medium">
+                                    {addon.duration && `${addon.duration} นาที`}
+                                    {addon.duration && addon.price && ' • '}
+                                    {addon.price && `${Number(addon.price).toLocaleString()} ${profile.currencySymbol}`}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {/* Summary */}
+            <div className="border-t pt-3 space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-600">📅 {appointmentDate ? format(appointmentDate, 'dd MMM yyyy, HH:mm น.', { locale: th }) : '-'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-gray-700">รวมทั้งหมด</span>
+                    <div className="text-right">
+                        <div className="text-sm font-bold text-gray-900">{(appointment.paymentInfo?.totalPrice || 0).toLocaleString()} {profile.currencySymbol}</div>
+                        {totalDuration > 0 && (
+                            <div className="text-xs text-gray-500">{totalDuration} นาที</div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2 pt-2 border-t">
+                {/* ปุ่มเดียวที่เปลี่ยนตามสถานะ */}
+                {appointment.status === 'awaiting_confirmation' && (
+                    <button 
+                        onClick={() => navigateToDetail(router, appointment.id)} 
+                        className="text-xs bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                    >
+                        ยืนยันการจอง
+                    </button>
+                )}
+                
+                {appointment.status === 'confirmed' && (
+                    <button 
+                        onClick={() => navigateToDetail(router, appointment.id)} 
+                        className="text-xs bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                    >
+                        เริ่มให้บริการ
+                    </button>
+                )}
+                
+                {appointment.status === 'in_progress' && (
+                    <button 
+                        onClick={() => navigateToDetail(router, appointment.id)} 
+                        className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                    >
+                        บริการเสร็จสิ้น
+                    </button>
+                )}
+                
+                {['completed', 'cancelled'].includes(appointment.status) && (
+                    <button 
+                        onClick={() => navigateToDetail(router, appointment.id)} 
+                        className="text-xs bg-slate-700 hover:bg-slate-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                    >
+                        ดูรายละเอียด
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// --- Main Page Component ---
+export default function AdminDashboardPage() {
+    const [allAppointments, setAllAppointments] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [appointmentToCancel, setAppointmentToCancel] = useState(null);
+    const [activeTab, setActiveTab] = useState('in_progress');
+    const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'table'
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 12;
+    const { profile, loading: profileLoading } = useProfile();
+
+    const getMonthRange = () => {
+        const now = new Date();
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        return {
+            startDate: format(firstDay, 'yyyy-MM-dd'),
+            endDate: format(lastDay, 'yyyy-MM-dd'),
+        };
+    };
+    const [filters, setFilters] = useState({
+        ...getMonthRange(),
+        search: '',
+    });
+    const router = useRouter();
+
+    useEffect(() => {
+        const appointmentsQuery = query(collection(db, 'appointments'), orderBy('appointmentInfo.dateTime', 'desc'));
+        const unsubscribe = onSnapshot(appointmentsQuery, (snapshot) => {
+            const appointmentsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setAllAppointments(appointmentsData);
+            setLoading(false);
+        }, (error) => {
+            console.error("Error fetching appointments:", error);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const handleFilterChange = (e) => {
+        const { name, value } = e.target;
+        setFilters(prev => ({ ...prev, [name]: value }));
+    };
+    
+    const filteredAppointments = useMemo(() => {
+        const startDate = startOfDay(parseISO(filters.startDate));
+        const endDate = endOfDay(parseISO(filters.endDate));
+        const search = filters.search.toLowerCase();
+
+        return allAppointments.filter(app => {
+            const appDate = app.appointmentInfo?.dateTime?.toDate();
+            if (!appDate || appDate < startDate || appDate > endDate) return false;
+            if (search && 
+                !app.customerInfo?.fullName?.toLowerCase().includes(search) &&
+                !app.customerInfo?.phone?.includes(search)) return false;
+            return true;
+        }).sort((a,b) => (a.appointmentInfo?.dateTime?.toDate() || 0) - (b.appointmentInfo?.dateTime?.toDate() || 0));
+    }, [allAppointments, filters]);
+
+    const handleConfirmCancel = async (appointmentId, reason) => {
+        const result = await cancelAppointmentByAdmin(appointmentId, reason);
+        if (result.success) alert('ยกเลิกการนัดหมายสำเร็จ');
+        else alert(`เกิดข้อผิดพลาด: ${result.error}`);
+    };
+
+    const appointmentsForActiveTab = filteredAppointments.filter(a => a.status === activeTab);
+    
+    const totalItems = appointmentsForActiveTab.length;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const currentAppointments = appointmentsForActiveTab.slice(startIndex, endIndex);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeTab, filters]);
+    
+    if (loading || profileLoading) return <div className="text-center p-10">Loading Dashboard...</div>;
+
+    return (
+        <div className="container mx-auto p-4 md:p-8">
+            {appointmentToCancel && <CancelAppointmentModal appointment={appointmentToCancel} onClose={() => setAppointmentToCancel(null)} onConfirm={handleConfirmCancel} />}
+            
+            <header className="pb-4 border-b mb-4">
+                <h1 className="text-2xl font-bold text-slate-800">ภาพรวมการนัดหมาย</h1>
+                <div className="flex flex-wrap items-center gap-4 mt-4 text-black">
+                     <div>
+                        <label className=" text-sm font-medium mr-2">วันที่เริ่มต้น:</label>
+                        <input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} className="p-2 border rounded-md"/>
+                    </div>
+                    <div>
+                        <label className="text-sm font-medium mr-2">วันที่สิ้นสุด:</label>
+                        <input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} className="p-2 border rounded-md"/>
+                    </div>
+                     <div>
+                        <label className="text-sm font-medium mr-2">ค้นหา:</label>
+                        <input type="text" name="search" placeholder="ชื่อ หรือ เบอร์โทร" value={filters.search} onChange={handleFilterChange} className="p-2 border rounded-md"/>
+                    </div>
+                </div>
+            </header>
+
+            <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                <div className="flex flex-wrap gap-2">
+                    {TABS.map(tab => (
+                        <button key={tab.key} onClick={() => setActiveTab(tab.key)} 
+                            className={`px-4 py-2 rounded-md font-semibold text-sm transition-colors ${activeTab === tab.key ? 'bg-slate-800 text-white' : 'bg-white hover:bg-gray-100 text-gray-600'}`}>
+                            {tab.label} ({filteredAppointments.filter(a => a.status === tab.key).length})
+                        </button>
+                    ))}
+                </div>
+                <div className="flex items-center gap-2 p-1 bg-gray-200 text-black rounded-md">
+                    <button onClick={() => setViewMode('grid')} className={`px-3 py-1 rounded ${viewMode === 'grid' ? 'bg-white shadow' : ''}`}>แถว</button>
+                    <button onClick={() => setViewMode('table')} className={`px-3 py-1 rounded ${viewMode === 'table' ? 'bg-white shadow' : ''}`}>ตาราง</button>
+                </div>
+            </div>
+
+            {totalItems > 0 && (
+                <div className="flex justify-between items-center mb-4 text-sm text-gray-600">
+                    <div>
+                        แสดง {startIndex + 1}-{Math.min(endIndex, totalItems)} จาก {totalItems} รายการ
+                    </div>
+                    <div>
+                        หน้า {currentPage} จาก {totalPages}
+                    </div>
+                </div>
+            )}
+
+            <div className="mt-4">
+                {viewMode === 'grid' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {currentAppointments.map(app => (
+                            <AppointmentCard key={app.id} appointment={app} onCancelClick={setAppointmentToCancel} />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="bg-white shadow-md rounded-lg overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ลูกค้า</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">บริการ</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">วันที่/เวลา</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ราคา</th>
+                                    <th className="relative px-6 py-3"><span className="sr-only">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {currentAppointments.map(app => (
+                                    <tr key={app.id}>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="font-medium text-gray-900">{app.customerInfo?.fullName || app.customerInfo?.name}</div>
+                                            <div className="text-sm text-gray-500">{app.customerInfo?.phone}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                                            <p className="font-medium">{app.serviceInfo?.name}</p>
+                                            
+                                            {/* Multi-area service details */}
+                                            {app.serviceInfo?.serviceType === 'multi-area' && (
+                                                <div className="text-xs text-primary mt-1">
+                                                    {app.serviceInfo?.selectedArea && (
+                                                        <div>📍 {app.serviceInfo.selectedArea.name}</div>
+                                                    )}
+                                                    {app.serviceInfo?.selectedPackage && (
+                                                        <div className="text-gray-600">
+                                                            📦 {app.serviceInfo.selectedPackage.duration} นาที | {app.serviceInfo.selectedPackage.price.toLocaleString()} {profile.currencySymbol}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                            
+                                            {(app.appointmentInfo?.addOns?.length || app.addOns?.length) > 0 && (
+                                                <ul className="list-disc ml-4 text-xs text-gray-600 mt-1">
+                                                    {(app.appointmentInfo?.addOns || app.addOns || []).map((addon, idx) => (
+                                                        <li key={idx}>
+                                                            {addon.name || addon.title || 'ไม่มีชื่อ'}
+                                                            {addon.price ? ` (${Number(addon.price).toLocaleString()} ${profile.currencySymbol})` : ''}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{app.appointmentInfo?.dateTime?.toDate() ? format(app.appointmentInfo.dateTime.toDate(), 'dd MMM yy, HH:mm', { locale: th }) : '-'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{(app.paymentInfo?.totalPrice || 0).toLocaleString()} {profile.currencySymbol}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                             <button onClick={() => navigateToDetail(router, app.id)} className="text-indigo-600 hover:text-indigo-900">ดูรายละเอียด</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+                 {appointmentsForActiveTab.length === 0 && (
+                    <p className="text-center text-gray-500 pt-10">ไม่พบรายการนัดหมายสำหรับสถานะนี้ในช่วงวันที่ที่เลือก</p>
+                )}
+            </div>
+
+            {totalPages > 1 && (
+                <div className="flex justify-center items-center mt-6 space-x-2">
+                    <button
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300"
+                    >
+                        ก่อนหน้า
+                    </button>
+                    
+                    <div className="flex space-x-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => {
+                            const showPage = pageNum === 1 || 
+                                           pageNum === totalPages || 
+                                           Math.abs(pageNum - currentPage) <= 2;
+                            
+                            if (!showPage) {
+                                if (pageNum === currentPage - 3 || pageNum === currentPage + 3) {
+                                    return <span key={pageNum} className="px-2 py-1 text-gray-400">...</span>;
+                                }
+                                return null;
+                            }
+                            
+                            return (
+                                <button
+                                    key={pageNum}
+                                    onClick={() => setCurrentPage(pageNum)}
+                                    className={`px-3 py-2 rounded-md ${ 
+                                        currentPage === pageNum
+                                            ? 'bg-slate-800 text-white'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                >
+                                    {pageNum}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    
+                    <button
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300"
+                    >
+                        ถัดไป
+                    </button>
                 </div>
             )}
         </div>
     );
 }
+

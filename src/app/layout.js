@@ -1,17 +1,29 @@
-// src/app/layout.js
-import { Inter } from "next/font/google";
+import { Barlow, Noto_Sans_Thai } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/context/AuthContext";
+import { ToastProvider } from "@/app/components/Toast";
 
-const inter = Inter({ subsets: ["latin"] });
+// --- ตั้งค่าฟอนต์ที่ต้องการ ---
+const barlow = Barlow({
+  weight: ['400', '500', '700'], // เลือกน้ำหนักที่ต้องการใช้
+  subsets: ["latin"],
+  display: 'swap', // ช่วยให้เว็บแสดงผลเร็วขึ้น
+  variable: "--font-barlow", // กำหนดชื่อ CSS Variable
+});
 
-// 1. แยก metadata ทั่วไปออกมา
+const notoSansThai = Noto_Sans_Thai({
+  weight: ['400', '500', '700'],
+  subsets: ["thai"],
+  display: 'swap',
+  variable: "--font-noto-sans-thai",
+});
+
+// 1. metadata ทั่วไป (ไม่มี viewport)
 export const metadata = {
-  title: "Management",
-  description: "ระบบจัดการรถในองค์กร",
+  title: "Spa & Massage Booking System",
+  description: "ระบบจองบริการสปา",
 };
 
-// 2. สร้าง function generateViewport แยกออกมาโดยเฉพาะ
+// 2. เพิ่ม function generateViewport เพื่อปิดการซูม
 export function generateViewport() {
   return {
     width: "device-width",
@@ -24,11 +36,13 @@ export function generateViewport() {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <AuthProvider>
+      {/* 3. ใช้ CSS Variables ของฟอนต์ */}
+      <body className={`${barlow.variable} ${notoSansThai.variable} antialiased`}>
+        <ToastProvider>
           {children}
-        </AuthProvider>
+        </ToastProvider>
       </body>
     </html>
   );
 }
+
