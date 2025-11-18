@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --font-base:#000000;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --font-base:#000000;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--font-base);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.gradient-bg {
+  background-image: linear-gradient(to bottom, #075b50, #002629);
+  padding-left: 1.5rem; /* 24px */
+  padding-right: 1.5rem; /* 24px */
+  padding-top: 2rem; /* 32px */
+  padding-bottom: 5rem; /* 96px */
+}
+
+
+/* Animation for modal */
+@keyframes scale-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out;
+}
