@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, query, collection, where, limit } from "firebase/firestore"; // เพิ่ม query, collection, where, limit
 import MainHeader from '@/components/main/MainHeader';
 import Image from 'next/image';
 import { getImageUrl } from '@/lib/imageHelpers';
@@ -22,79 +22,98 @@ export default function MyVehiclePage() {
     const [showReturnModal, setShowReturnModal] = useState(false);
     const [returnMessage, setReturnMessage] = useState("");
 
-    // Fetch active vehicle usage และ expenses พร้อมกัน
+    // Fetch active vehicle usage และ expenses พร้อมกัน (Updated Logic)
     useEffect(() => {
         if (!user && !userProfile) {
             setLoading(false);
             return;
         }
 
+        let unsubUsage = null;
         let unsubVehicle = null;
-        let isMounted = true;
+        let unsubExpenses = null; // เพิ่มตัวแปรสำหรับ unsubscribe expenses
 
-        const fetchActiveUsage = async () => {
-            try {
-                const userId = userProfile?.lineId || user?.uid;
-                const response = await fetch(`/api/vehicle-usage/active?userId=${userId}`);
-                const result = await response.json();
+        const userId = userProfile?.lineId || user?.uid;
 
-                if (!isMounted) return;
+        // 1. Realtime Listener สำหรับหา Active Usage
+        const usageQuery = query(
+            collection(db, 'vehicle-usage'),
+            where('userId', '==', userId),
+            where('status', '==', 'active'),
+            limit(1)
+        );
 
-                if (result.success && result.usage) {
-                    setActiveUsage(result.usage);
-                    setEndMileage(result.usage.startMileage?.toString() || "");
+        unsubUsage = onSnapshot(usageQuery, (snapshot) => {
+            if (!snapshot.empty) {
+                const usageDoc = snapshot.docs[0];
+                const usageData = { id: usageDoc.id, ...usageDoc.data() };
+                
+                // แปลง Timestamp เป็น ISO String เพื่อความสม่ำเสมอ (ถ้าจำเป็น)
+                if (usageData.startTime?.toDate) {
+                    usageData.startTime = usageData.startTime.toDate().toISOString();
+                }
 
-                    // โหลด vehicle และ expenses พร้อมกัน
-                    if (result.usage.vehicleId) {
-                        // 1. Fetch vehicle details (realtime)
-                        const vehicleRef = doc(db, "vehicles", result.usage.vehicleId);
-                        unsubVehicle = onSnapshot(vehicleRef, (docSnap) => {
-                            if (!isMounted) return;
-                            if (docSnap.exists()) {
-                                setVehicle({ id: docSnap.id, ...docSnap.data() });
-                            } else {
-                                setVehicle({
-                                    id: result.usage.vehicleId,
-                                    licensePlate: result.usage.vehicleLicensePlate,
-                                    brand: '',
-                                    model: ''
-                                });
-                            }
-                        });
+                setActiveUsage(usageData);
+                setEndMileage(usageData.startMileage?.toString() || "");
 
-                        // 2. Fetch expenses (ครั้งเดียว ไม่ต้อง polling)
-                        try {
-                            const expensesResponse = await fetch(`/api/expenses?usageId=${result.usage.id}`);
-                            const expensesResult = await expensesResponse.json();
-                            if (isMounted && expensesResult.success) {
-                                setExpenses(expensesResult.expenses || []);
-                            }
-                        } catch (error) {
-                            console.error("Error fetching expenses:", error);
+                // เมื่อได้ Usage แล้ว จึง Subscribe Vehicle และ Expenses
+                if (usageData.vehicleId) {
+                    // 2. Realtime Listener สำหรับ Vehicle
+                    const vehicleRef = doc(db, "vehicles", usageData.vehicleId);
+                    unsubVehicle = onSnapshot(vehicleRef, (docSnap) => {
+                        if (docSnap.exists()) {
+                            setVehicle({ id: docSnap.id, ...docSnap.data() });
+                        } else {
+                            setVehicle({
+                                id: usageData.vehicleId,
+                                licensePlate: usageData.vehicleLicensePlate,
+                                brand: '',
+                                model: ''
+                            });
                         }
+                    });
 
+                    // 3. Realtime Listener สำหรับ Expenses (แทนการ fetch API)
+                    const expensesQuery = query(
+                        collection(db, 'expenses'),
+                        where('usageId', '==', usageData.id)
+                    );
+                    
+                    unsubExpenses = onSnapshot(expensesQuery, (expSnapshot) => {
+                        const expensesData = expSnapshot.docs.map(doc => {
+                            const data = doc.data();
+                            // แปลง Timestamp
+                            if (data.timestamp?.toDate) {
+                                data.timestamp = data.timestamp.toDate().toISOString();
+                            }
+                            return { id: doc.id, ...data };
+                        });
+                        setExpenses(expensesData);
+                        setLoading(false); // Data พร้อมแล้ว
+                    }, (error) => {
+                        console.error("Error fetching expenses:", error);
                         setLoading(false);
-                    } else {
-                        setLoading(false);
-                    }
+                    });
+
                 } else {
-                    setActiveUsage(null);
-                    setVehicle(null);
-                    setExpenses([]);
                     setLoading(false);
                 }
-            } catch (error) {
-                if (isMounted) {
-                    setLoading(false);
-                }
+            } else {
+                // กรณีไม่พบ Active Usage
+                setActiveUsage(null);
+                setVehicle(null);
+                setExpenses([]);
+                setLoading(false);
             }
-        };
-
-        fetchActiveUsage();
+        }, (error) => {
+            console.error("Error fetching active usage:", error);
+            setLoading(false);
+        });
 
         return () => {
-            isMounted = false;
+            if (unsubUsage) unsubUsage();
             if (unsubVehicle) unsubVehicle();
+            if (unsubExpenses) unsubExpenses();
         };
     }, [user, userProfile]);
 
@@ -189,8 +208,7 @@ export default function MyVehiclePage() {
             if (!result.success) {
                 alert(result.error || 'เกิดข้อผิดพลาดในการลบ');
             } else {
-                // อัพเดท state ทันทีโดยไม่ต้อง reload
-                setExpenses(prev => prev.filter(e => e.id !== expenseId));
+                // ไม่ต้องทำอะไรเพิ่ม state จะอัปเดตอัตโนมัติจาก onSnapshot
             }
         } catch (err) {
             console.error('ลบค่าใช้จ่าย error', err);
@@ -198,30 +216,7 @@ export default function MyVehiclePage() {
         }
     };
 
-    // Refresh expenses หลังบันทึกค่าใช้จ่ายใหม่
-    const refreshExpenses = async () => {
-        if (!activeUsage) return;
-        try {
-            const response = await fetch(`/api/expenses?usageId=${activeUsage.id}`);
-            const result = await response.json();
-            if (result.success) {
-                setExpenses(result.expenses || []);
-            }
-        } catch (error) {
-            console.error("Error refreshing expenses:", error);
-        }
-    };
-
-    // เรียก refreshExpenses เมื่อกลับมาที่หน้านี้
-    useEffect(() => {
-        const handleFocus = () => {
-            if (activeUsage) {
-                refreshExpenses();
-            }
-        };
-        window.addEventListener('focus', handleFocus);
-        return () => window.removeEventListener('focus', handleFocus);
-    }, [activeUsage]);
+    // ไม่จำเป็นต้องมี refreshExpenses แล้ว เพราะใช้ onSnapshot
 
     if (loading) {
         return (
