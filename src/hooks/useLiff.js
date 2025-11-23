@@ -1,5 +1,3 @@
-// src/hooks/useLiff.js
-
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -25,11 +23,15 @@ const useLiff = (liffId) => {
                     isMock = mockFlag === '1' || mockFlag === 'true';
                 }
             } catch (e) {}
-            if (isMock || process.env.NODE_ENV === 'development') {
+            
+            // แก้ไข: ลบเงื่อนไข || process.env.NODE_ENV === 'development' ออก
+            // เพื่อให้ใช้ LIFF ของจริงแม้จะรันในเครื่อง (เว้นแต่จะตั้งค่า LIFF_MOCK ไว้)
+            if (isMock) {
                 console.warn("LIFF mock mode is active.");
                 const mockLiff = {
                     isInClient: () => true,
                     isLoggedIn: () => true,
+                    getAccessToken: () => 'MOCK_ACCESS_TOKEN', // เพิ่ม getAccessToken ให้ Mock
                     getIDToken: () => 'MOCK_ID_TOKEN',
                     closeWindow: () => {
                         console.log('Mock: LIFF window closed');
@@ -139,11 +141,8 @@ const useLiff = (liffId) => {
             } catch (err) {
                 console.error("LIFF initialization failed", err);
                 
-                // --- ส่วนที่แก้ไข ---
-                // แสดง Error ที่ละเอียดขึ้นบนหน้าจอเพื่อการดีบัก
                 const detailedError = `การเชื่อมต่อ LINE ไม่สมบูรณ์: ${err.message || 'Unknown error'}`;
                 setError(detailedError);
-                // --- จบส่วนที่แก้ไข ---
                 
             } finally {
                 setLoading(false);
