@@ -179,7 +179,7 @@ export default function SettingsPage() {
                                 </button>
                             </div>
                             <p className="text-xs text-gray-500 mt-1">
-                              *ต้องเพิ่ม LINE OA เข้ากลุ่มก่อน และอย่าลืมกด "บันทึกการแจ้งเตือน" ด้านล่างหลังแก้ไข ID
+                              *ต้องเพิ่ม LINE OA เข้ากลุ่มก่อน และอย่าลืมกด &quot;บันทึกการแจ้งเตือน&quot; ด้านล่างหลังแก้ไข ID
                             </p>
                           </div>
                         </div>
