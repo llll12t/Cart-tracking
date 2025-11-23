@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot, query, collection, where, limit } from "firebase/firestore"; // เพิ่ม query, collection, where, limit
+import { doc, onSnapshot, query, collection, where, limit } from "firebase/firestore";
 import MainHeader from '@/components/main/MainHeader';
 import Image from 'next/image';
 import { getImageUrl } from '@/lib/imageHelpers';
+import SkeletonLoader from "@/components/main/SkeletonLoader"; // Import Skeleton
 
 export default function MyVehiclePage() {
     const { user, userProfile } = useAuth();
@@ -22,16 +23,16 @@ export default function MyVehiclePage() {
     const [showReturnModal, setShowReturnModal] = useState(false);
     const [returnMessage, setReturnMessage] = useState("");
 
-    // Fetch active vehicle usage และ expenses พร้อมกัน (Updated Logic)
     useEffect(() => {
+        // รอ Auth โหลดเสร็จก่อน
         if (!user && !userProfile) {
-            setLoading(false);
+            // ถ้า Auth ยังไม่มา ให้ loading ค้างไว้ก่อน หรือถ้าแน่ใจว่าไม่มี user แล้วค่อยปิด
             return;
         }
 
         let unsubUsage = null;
         let unsubVehicle = null;
-        let unsubExpenses = null; // เพิ่มตัวแปรสำหรับ unsubscribe expenses
+        let unsubExpenses = null;
 
         const userId = userProfile?.lineId || user?.uid;
 
@@ -48,7 +49,6 @@ export default function MyVehiclePage() {
                 const usageDoc = snapshot.docs[0];
                 const usageData = { id: usageDoc.id, ...usageDoc.data() };
                 
-                // แปลง Timestamp เป็น ISO String เพื่อความสม่ำเสมอ (ถ้าจำเป็น)
                 if (usageData.startTime?.toDate) {
                     usageData.startTime = usageData.startTime.toDate().toISOString();
                 }
@@ -56,7 +56,10 @@ export default function MyVehiclePage() {
                 setActiveUsage(usageData);
                 setEndMileage(usageData.startMileage?.toString() || "");
 
-                // เมื่อได้ Usage แล้ว จึง Subscribe Vehicle และ Expenses
+                // [OPTIMIZATION] เจอ Active Usage แล้ว ปิด Loading ทันทีเพื่อให้ UI แสดงผลก่อน
+                // ข้อมูล Vehicle และ Expenses จะตามมาทีหลัง (Pop-in)
+                setLoading(false);
+
                 if (usageData.vehicleId) {
                     // 2. Realtime Listener สำหรับ Vehicle
                     const vehicleRef = doc(db, "vehicles", usageData.vehicleId);
@@ -73,7 +76,7 @@ export default function MyVehiclePage() {
                         }
                     });
 
-                    // 3. Realtime Listener สำหรับ Expenses (แทนการ fetch API)
+                    // 3. Realtime Listener สำหรับ Expenses
                     const expensesQuery = query(
                         collection(db, 'expenses'),
                         where('usageId', '==', usageData.id)
@@ -82,21 +85,16 @@ export default function MyVehiclePage() {
                     unsubExpenses = onSnapshot(expensesQuery, (expSnapshot) => {
                         const expensesData = expSnapshot.docs.map(doc => {
                             const data = doc.data();
-                            // แปลง Timestamp
                             if (data.timestamp?.toDate) {
                                 data.timestamp = data.timestamp.toDate().toISOString();
                             }
                             return { id: doc.id, ...data };
                         });
                         setExpenses(expensesData);
-                        setLoading(false); // Data พร้อมแล้ว
                     }, (error) => {
                         console.error("Error fetching expenses:", error);
-                        setLoading(false);
                     });
 
-                } else {
-                    setLoading(false);
                 }
             } else {
                 // กรณีไม่พบ Active Usage
@@ -132,7 +130,6 @@ export default function MyVehiclePage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     usageId: activeUsage.id,
-                    // ไม่ส่ง endMileage ถ้าไม่ได้กรอก
                     ...(endMileage ? { endMileage: Number(endMileage) } : {}),
                 }),
             });
@@ -147,7 +144,6 @@ export default function MyVehiclePage() {
 
             setReturnMessage("ส่งคืนรถสำเร็จ!");
             setTimeout(() => {
-                // Try to close LIFF if available
                 if (typeof window !== 'undefined' && window.liff && typeof window.liff.close === 'function') {
                     window.liff.close();
                 } else {
@@ -195,20 +191,14 @@ export default function MyVehiclePage() {
         return expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
     };
 
-    // ลบค่าใช้จ่าย
     const handleDeleteExpense = async (expenseId) => {
-        console.log('ลบค่าใช้จ่าย', expenseId);
         if (!expenseId) return;
         if (!window.confirm('ยืนยันการลบรายการนี้?')) return;
         try {
             const res = await fetch(`/api/expenses?id=${expenseId}`, { method: 'DELETE' });
-            console.log('API response', res);
             const result = await res.json();
-            console.log('API result', result);
             if (!result.success) {
                 alert(result.error || 'เกิดข้อผิดพลาดในการลบ');
-            } else {
-                // ไม่ต้องทำอะไรเพิ่ม state จะอัปเดตอัตโนมัติจาก onSnapshot
             }
         } catch (err) {
             console.error('ลบค่าใช้จ่าย error', err);
@@ -216,22 +206,20 @@ export default function MyVehiclePage() {
         }
     };
 
-    // ไม่จำเป็นต้องมี refreshExpenses แล้ว เพราะใช้ onSnapshot
-
+    // [UX IMPROVEMENT] ใช้ SkeletonLoader แทนข้อความธรรมดา
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50">
                 <MainHeader userProfile={userProfile} activeTab={activeTab} setActiveTab={setActiveTab} />
-                <div className="px-4 py-6 -mt-16">
-                    <div className="text-center py-12">
-                        <p className="text-gray-600">กำลังโหลดข้อมูล...</p>
-                    </div>
+                <div className="-mt-16 px-4">
+                   {/* แสดง Skeleton จาก component ที่มีอยู่ */}
+                   <SkeletonLoader />
                 </div>
             </div>
         );
     }
 
-    if (!activeUsage || !vehicle) {
+    if (!activeUsage) {
         return (
             <div className="min-h-screen bg-gray-50">
                 <MainHeader userProfile={userProfile} activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -277,14 +265,13 @@ export default function MyVehiclePage() {
                                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                                 <span className="text-teal-700 text-xs font-medium">กำลังใช้งาน</span>
                             </div>
-                            <h2 className="text-base font-bold text-gray-800">{vehicle.licensePlate}</h2>
-                            <p className="text-xs text-gray-500 mb-1">{vehicle.brand} {vehicle.model}</p>
+                            <h2 className="text-base font-bold text-gray-800">{vehicle ? vehicle.licensePlate : activeUsage.vehicleLicensePlate}</h2>
+                            <p className="text-xs text-gray-500 mb-1">{vehicle ? `${vehicle.brand} ${vehicle.model}` : 'กำลังโหลดข้อมูลรถ...'}</p>
                             <div className="flex flex-col gap-1">
                                 <div className="flex gap-2 text-xs">
                                     <span className="text-gray-600">เริ่มใช้งาน:</span>
                                     <span className="font-medium">{formatDateTime(activeUsage.startTime)}</span>
                                 </div>
-                                {/* ไม่ต้องแสดงไมล์เริ่มต้น */}
                                 {activeUsage.destination && (
                                     <div className="flex gap-2 text-xs">
                                         <span className="text-gray-600">จุดหมาย:</span>
