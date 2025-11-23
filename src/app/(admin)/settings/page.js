@@ -9,13 +9,22 @@ export default function SettingsPage() {
   const [newType, setNewType] = useState('');
   const [savingTypes, setSavingTypes] = useState(false);
   const [usageLimits, setUsageLimits] = useState({ storageMB: 512, firestoreDocs: 10000 });
+  
+  // State สำหรับปุ่มทดสอบ
+  const [testingReport, setTestingReport] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
         const res = await fetch('/api/notifications/settings');
         const data = await res.json();
-        setNotifSettings(data.roles || null);
+        setNotifSettings(data.roles || {});
+        
+        // โหลดการตั้งค่า Daily Report เพิ่มเติม
+        if (data.dailyReport) {
+           setNotifSettings(prev => ({ ...prev, dailyReport: data.dailyReport }));
+        }
+
         setVehicleTypes(data.vehicleTypes || ['รถ SUV', 'รถเก๋ง', 'รถกระบะ', 'รถตู้', 'รถบรรทุก', 'มอเตอร์ไซค์', 'อื่นๆ']);
         setUsageLimits(data.usageLimits || { storageMB: 512, firestoreDocs: 10000 });
       } catch (err) {
@@ -25,10 +34,36 @@ export default function SettingsPage() {
     load();
   }, []);
 
+  // ฟังก์ชันสำหรับปุ่มทดสอบ
+  const handleTestReport = async () => {
+    if (!notifSettings?.dailyReport?.groupId) {
+        alert('กรุณากรอก Group ID และบันทึกการตั้งค่าก่อนทำการทดสอบ');
+        return;
+    }
+    
+    // ถามยืนยันก่อนส่ง
+    if (!confirm('ระบบจะส่งรายงานสรุปไปยังกลุ่ม LINE ทันที คุณต้องการดำเนินการต่อหรือไม่?')) {
+        return;
+    }
 
-
-  // usage limits are saved together with notification/settings; no separate save handler needed.
-
+    setTestingReport(true);
+    try {
+        // เรียก API Cron Job โดยตรง
+        const res = await fetch('/api/cron/daily-report');
+        const data = await res.json();
+        
+        if (res.ok) {
+            alert('✅ ส่งรายงานทดสอบสำเร็จ! กรุณาตรวจสอบในกลุ่ม LINE');
+        } else {
+            alert(`❌ การส่งล้มเหลว: ${data.error || 'ไม่ทราบสาเหตุ'}`);
+        }
+    } catch (err) {
+        console.error(err);
+        alert('❌ เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+    } finally {
+        setTestingReport(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-100 to-blue-50 py-8 flex justify-center items-start">
@@ -103,25 +138,73 @@ export default function SettingsPage() {
                       </div>
                     </div>
 
-                    {/* Show message if all toggles are off */}
-                    {[
-                      notifSettings.admin?.booking_created,
-                      notifSettings.admin?.vehicle_borrowed,
-                      notifSettings.admin?.vehicle_returned,
-                      notifSettings.driver?.booking_created,
-                      notifSettings.driver?.vehicle_borrowed,
-                      notifSettings.driver?.vehicle_returned,
-                      notifSettings.employee?.booking_created,
-                      notifSettings.employee?.vehicle_borrowed,
-                      notifSettings.employee?.vehicle_returned
-                    ].every(v => !v) && (
-                      <div className="text-center text-sm text-red-500 font-medium">คุณไม่ได้เปิดการแจ้งเตือนใด ๆ</div>
-                    )}
+                    {/* Daily Report Section */}
+                    <div className="p-4 border border-indigo-100 rounded-xl bg-indigo-50/40 mt-6">
+                        <div className="font-semibold text-indigo-800 mb-2 flex items-center gap-2">
+                          📊 รายงานประจำวัน (Daily Report)
+                        </div>
+                        <div className="space-y-4">
+                          <label className="flex items-center justify-between">
+                            <span className="text-sm">เปิดใช้งานรายงานอัตโนมัติ (10:00 น.)</span>
+                            <input 
+                              type="checkbox" 
+                              className="accent-indigo-600 w-5 h-5" 
+                              checked={!!notifSettings.dailyReport?.enabled} 
+                              onChange={e => setNotifSettings(s => ({
+                                ...s, 
+                                dailyReport: { ...s.dailyReport, enabled: e.target.checked }
+                              }))} 
+                            />
+                          </label>
+                          
+                          <div>
+                            <label className="block text-sm text-gray-700 mb-1">LINE Group ID สำหรับส่งรายงาน</label>
+                            <div className="flex gap-2">
+                                <input 
+                                  type="text" 
+                                  placeholder="Cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                                  className="flex-1 p-2 border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                  value={notifSettings.dailyReport?.groupId || ''}
+                                  onChange={e => setNotifSettings(s => ({
+                                    ...s, 
+                                    dailyReport: { ...s.dailyReport, groupId: e.target.value }
+                                  }))}
+                                />
+                                <button
+                                    onClick={handleTestReport}
+                                    disabled={testingReport || !notifSettings.dailyReport?.groupId}
+                                    className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                >
+                                    {testingReport ? 'กำลังส่ง...' : '🔔 ทดสอบส่ง'}
+                                </button>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              *ต้องเพิ่ม LINE OA เข้ากลุ่มก่อน และอย่าลืมกด "บันทึกการแจ้งเตือน" ด้านล่างหลังแก้ไข ID
+                            </p>
+                          </div>
+                        </div>
+                    </div>
 
                     <div className="flex gap-3 justify-end mt-6">
                       <button onClick={async () => {
                         try {
-                          await fetch('/api/notifications/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ roles: notifSettings, vehicleTypes, usageLimits }) });
+                          const payload = { 
+                            roles: {
+                                admin: notifSettings.admin,
+                                driver: notifSettings.driver,
+                                employee: notifSettings.employee
+                            }, 
+                            dailyReport: notifSettings.dailyReport,
+                            vehicleTypes, 
+                            usageLimits 
+                          };
+                          
+                          await fetch('/api/notifications/settings', { 
+                            method: 'POST', 
+                            headers: {'Content-Type':'application/json'}, 
+                            body: JSON.stringify(payload) 
+                          });
+                          
                           alert('บันทึกการตั้งค่าเรียบร้อย');
                         } catch (err) { console.error(err); alert('ไม่สามารถบันทึกได้'); }
                       }} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow transition">บันทึกการแจ้งเตือน</button>

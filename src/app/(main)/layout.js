@@ -6,15 +6,14 @@ import useLiffAuth from '@/hooks/useLiffAuth';
 import { useState, useEffect } from 'react';
 import LiffQueryRouter from '@/components/main/LiffQueryRouter';
 
-// Layout หลักสำหรับพนักงาน
 export default function MainLayout({ children }) {
   const { user, userProfile, loading: authLoading, setUserProfileFromAuth } = useAuth();
+  // ดึง error: liffAuthError ออกมาใช้งาน
   const { loading: liffLoading, needsLink, linkProfile, linkByPhone, error: liffAuthError, userProfile: liffUserProfile } = useLiffAuth();
   const [phoneInput, setPhoneInput] = useState('');
   const [linking, setLinking] = useState(false);
   const [linkMessage, setLinkMessage] = useState('');
 
-  // ส่ง userProfile จาก useLiffAuth ไปยัง AuthContext
   useEffect(() => {
     if (liffUserProfile && setUserProfileFromAuth) {
       console.log('Setting userProfile from LIFF auth:', liffUserProfile);
@@ -22,36 +21,49 @@ export default function MainLayout({ children }) {
     }
   }, [liffUserProfile, setUserProfileFromAuth]);
 
-  // Loading state
   if (liffLoading || authLoading) {
     return (
       <div className="flex items-center justify-center bg-white min-h-screen">
         <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mx-auto mb-2"></div>
           <p className="text-gray-600">กำลังโหลด...</p>
         </div>
       </div>
     );
   }
 
-  // ถ้าไม่มี user ให้แสดงข้อความเข้าสู่ระบบ
-  if (!user) {
+  // -------------------------------------------------------
+  // [ส่วนที่เพิ่ม] ถ้ามี Error จาก LIFF/API ให้แสดงออกมาเลย
+  // -------------------------------------------------------
+  if (liffAuthError) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center p-6">
-          <div className="mb-4">
-            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-red-50 p-6">
+        <div className="bg-white p-6 rounded-lg shadow-md max-w-sm w-full text-center">
+          <h3 className="text-lg font-bold text-red-600 mb-2">เกิดข้อผิดพลาด!</h3>
+          <div className="bg-gray-100 p-3 rounded text-sm font-mono text-left text-red-800 break-words mb-4">
+            {typeof liffAuthError === 'string' ? liffAuthError : JSON.stringify(liffAuthError)}
           </div>
-          <p className="text-gray-600">กรุณาเข้าสู่ระบบผ่าน LINE</p>
+          <p className="text-xs text-gray-500 mb-4">
+            กรุณาแคปหน้าจอนี้แจ้งผู้ดูแลระบบ หรือตรวจสอบ Console Log
+          </p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 w-full"
+          >
+            ลองใหม่
+          </button>
         </div>
       </div>
     );
   }
+  // -------------------------------------------------------
 
-  // ถ้าต้องผูกเบอร์โทร (needsLink)
+
+
+  // ... (โค้ดส่วน needsLink และ return ปกติ ด้านล่างเหมือนเดิม) ...
   if (needsLink) {
-    return (
+     // ... (คงเดิม)
+     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
         <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
           <div className="mb-4">
@@ -111,7 +123,6 @@ export default function MainLayout({ children }) {
     );
   }
 
-  // ถ้ามี userProfile แล้ว (login และมี profile ในระบบ)
   if (userProfile) {
     return (
       <DataProvider userId={userProfile.uid}>
@@ -123,7 +134,6 @@ export default function MainLayout({ children }) {
     );
   }
 
-  // fallback: กรณี user มีแต่ยังไม่มี profile (และไม่เข้า needsLink)
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
       <div className="text-center">
@@ -133,3 +143,4 @@ export default function MainLayout({ children }) {
     </div>
   );
 }
+

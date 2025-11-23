@@ -107,9 +107,11 @@ export default function VehiclesAnalysisPage() {
             if (index > 0) {
               const prevExp = vFuelRecords[index - 1];
               distanceTraveled = exp.mileage - prevExp.mileage;
-              if (distanceTraveled > 0 && exp.amount > 0) {
-                fuelEfficiency = (distanceTraveled / exp.amount) * 1000;
-                costPerKm = exp.amount / distanceTraveled;
+              
+              // [แก้ไข] ใช้ prevExp.amount (ยอดเติมครั้งก่อน) มาคำนวณ
+              if (distanceTraveled > 0 && prevExp.amount > 0) {
+                fuelEfficiency = (distanceTraveled / prevExp.amount) * 1000;
+                costPerKm = prevExp.amount / distanceTraveled;
               }
             }
             allFuelRecords.push({ ...exp, distanceTraveled, fuelEfficiency, costPerKm });
@@ -132,7 +134,10 @@ export default function VehiclesAnalysisPage() {
           return sum;
         }, 0);
         const totalTrips = allFuelRecords.length;
+        // costPerKm รวม (คิดจาก totalExpenses / totalDistance) อาจจะไม่แม่นยำถ้าระยะทางรวมไม่สัมพันธ์กับ expenses ทั้งหมด
+        // แต่ในที่นี้คง logic เดิมไว้ หรือจะปรับให้ใช้ avg costPerKm ก็ได้
         const costPerKm = totalDistance > 0 ? totalExpenses / totalDistance : 0;
+        
         setAnalysisData({
           totalTrips,
           totalDistance,
@@ -192,6 +197,7 @@ export default function VehiclesAnalysisPage() {
 
         const fuelExpenses = allExpenses.filter(exp => exp.type === 'fuel' && exp.mileage);
         const sortedFuelExpenses = [...fuelExpenses].sort((a, b) => a.mileage - b.mileage);
+        
         const fuelRecords = sortedFuelExpenses.map((exp, index) => {
           let distanceTraveled = 0;
           let fuelEfficiency = null;
@@ -199,13 +205,16 @@ export default function VehiclesAnalysisPage() {
           if (index > 0) {
             const prevExp = sortedFuelExpenses[index - 1];
             distanceTraveled = exp.mileage - prevExp.mileage;
-            if (distanceTraveled > 0 && exp.amount > 0) {
-              fuelEfficiency = (distanceTraveled / exp.amount) * 1000;
-              costPerKm = exp.amount / distanceTraveled;
+            
+            // [แก้ไข] ใช้ prevExp.amount (ยอดเติมครั้งก่อน) มาคำนวณ
+            if (distanceTraveled > 0 && prevExp.amount > 0) {
+              fuelEfficiency = (distanceTraveled / prevExp.amount) * 1000;
+              costPerKm = prevExp.amount / distanceTraveled;
             }
           }
           return { ...exp, distanceTraveled, fuelEfficiency, costPerKm };
         });
+
         const validEfficiencies = fuelRecords.filter(r => r.fuelEfficiency !== null);
         const avgFuelEfficiency = validEfficiencies.length > 0
           ? validEfficiencies.reduce((sum, r) => sum + r.fuelEfficiency, 0) / validEfficiencies.length
