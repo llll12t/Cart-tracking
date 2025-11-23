@@ -1,10 +1,9 @@
-// src/context/AuthContext.js
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore'; // ตัด collection, query, where, getDocs ออก เพราะไม่ได้ใช้แล้ว
+import { doc, getDoc } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
@@ -25,11 +24,16 @@ export const AuthProvider = ({ children, initialUserProfile = null }) => {
       if (firebaseUser) {
         setUser(firebaseUser);
         
-        // -------------------------------------------------------
-        // ส่วนที่แก้ไข: เปลี่ยนจากการค้นหาด้วย Email เป็น UID
-        // -------------------------------------------------------
+        // [OPTIMIZATION] ตรวจสอบก่อนว่ามี userProfile อยู่แล้วหรือไม่ (จากการ Login ผ่าน LIFF)
+        // ถ้ามีอยู่แล้วและ uid ตรงกัน ไม่ต้องดึงใหม่จาก Firestore ให้เสียเวลา
+        if (userProfile && (userProfile.uid === firebaseUser.uid || userProfile.id === firebaseUser.uid)) {
+             console.log("Using existing user profile from LIFF/State, skipping Firestore fetch.");
+             setLoading(false);
+             return; 
+        }
+
+        // ถ้ายังไม่มี Profile ถึงค่อยไปดึงจาก Firestore
         try {
-          // ใช้ UID ค้นหาเอกสารใน collection 'users' โดยตรง
           const userDocRef = doc(db, 'users', firebaseUser.uid);
           const userDocSnap = await getDoc(userDocRef);
 
@@ -38,14 +42,12 @@ export const AuthProvider = ({ children, initialUserProfile = null }) => {
             setUserProfile({ uid: userDocSnap.id, ...userDocSnap.data() });
           } else {
             console.warn("No user profile found in Firestore for UID:", firebaseUser.uid);
-            // กรณีนี้อาจจะเกิดขึ้นถ้า User Auth มีอยู่ แต่ยังไม่มีข้อมูลใน Firestore
             setUserProfile(null);
           }
         } catch (err) {
           console.error("Error fetching user profile:", err);
           setUserProfile(null);
         }
-        // -------------------------------------------------------
 
       } else {
         console.log("No firebaseUser found, logging out.");
@@ -56,7 +58,7 @@ export const AuthProvider = ({ children, initialUserProfile = null }) => {
     });
 
     return () => unsubscribe();
-  }, []); 
+  }, [userProfile]); // เพิ่ม userProfile ใน dependency เพื่อให้ check state ล่าสุดได้ถูกต้อง
 
   const logout = useCallback(async () => {
     try {
