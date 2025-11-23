@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore'; // ตัด collection, query, where, getDocs ออก เพราะไม่ได้ใช้แล้ว
 
 const AuthContext = createContext();
 
@@ -21,40 +21,32 @@ export const AuthProvider = ({ children, initialUserProfile = null }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       console.log("onAuthStateChanged triggered. firebaseUser:", firebaseUser);
+      
       if (firebaseUser) {
         setUser(firebaseUser);
         
-        // ถ้ามี userProfile อยู่แล้ว (จาก login response) ไม่ต้องดึงใหม่
-        if (userProfile) {
-          console.log("userProfile already exists, skipping Firestore query");
-          setLoading(false);
-          return;
-        }
-        
-        console.log(`Attempting to find user profile with UID: ${firebaseUser.uid}`);
+        // -------------------------------------------------------
+        // ส่วนที่แก้ไข: เปลี่ยนจากการค้นหาด้วย Email เป็น UID
+        // -------------------------------------------------------
+        try {
+          // ใช้ UID ค้นหาเอกสารใน collection 'users' โดยตรง
+          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          const userDocSnap = await getDoc(userDocRef);
 
-        // ใช้ email ใน firebaseUser แทน UID (เหมือน payment flow)
-        let userEmail = firebaseUser.email;
-        if (!userEmail && firebaseUser.providerData && firebaseUser.providerData.length > 0) {
-          userEmail = firebaseUser.providerData[0].email;
-        }
-        if (userEmail) {
-          const usersRef = collection(db, 'users');
-          const q = query(usersRef, where('email', '==', userEmail));
-          const querySnapshot = await getDocs(q);
-          if (!querySnapshot.empty) {
-            const userDoc = querySnapshot.docs[0];
-            console.log("User document found with email:", userEmail);
-            setUserProfile({ uid: userDoc.id, ...userDoc.data() });
+          if (userDocSnap.exists()) {
+            console.log("User profile found via UID:", firebaseUser.uid);
+            setUserProfile({ uid: userDocSnap.id, ...userDocSnap.data() });
           } else {
-            console.log("No user document found for email:", userEmail);
-            // ไม่สร้างผู้ใช้อัตโนมัติที่นี่แล้ว - ย้ายไปทำที่ Backend
+            console.warn("No user profile found in Firestore for UID:", firebaseUser.uid);
+            // กรณีนี้อาจจะเกิดขึ้นถ้า User Auth มีอยู่ แต่ยังไม่มีข้อมูลใน Firestore
             setUserProfile(null);
           }
-        } else {
-          console.error("No email found in firebaseUser. Cannot query user profile.");
+        } catch (err) {
+          console.error("Error fetching user profile:", err);
           setUserProfile(null);
         }
+        // -------------------------------------------------------
+
       } else {
         console.log("No firebaseUser found, logging out.");
         setUser(null);
@@ -64,7 +56,7 @@ export const AuthProvider = ({ children, initialUserProfile = null }) => {
     });
 
     return () => unsubscribe();
-  }, []); // ลบ userProfile ออกจาก dependency เพื่อป้องกัน infinite loop
+  }, []); 
 
   const logout = useCallback(async () => {
     try {
@@ -77,7 +69,6 @@ export const AuthProvider = ({ children, initialUserProfile = null }) => {
     }
   }, []);
 
-  // ใช้ useMemo เพื่อป้องกัน context value object ถูกสร้างใหม่ทุกครั้ง
   const contextValue = useMemo(() => ({
     user,
     userProfile,
