@@ -1,3 +1,5 @@
+// src/hooks/useLiff.js
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -23,16 +25,15 @@ const useLiff = (liffId) => {
                     isMock = mockFlag === '1' || mockFlag === 'true';
                 }
             } catch (e) {}
-            
-            // แก้ไข: ลบเงื่อนไข || process.env.NODE_ENV === 'development' ออก
-            // เพื่อให้ใช้ LIFF ของจริงแม้จะรันในเครื่อง (เว้นแต่จะตั้งค่า LIFF_MOCK ไว้)
+
+            // แก้ไข 1: ใช้ Mockup เฉพาะเมื่อตั้งค่าใน localStorage เท่านั้น (ไม่บังคับใน dev mode)
             if (isMock) {
                 console.warn("LIFF mock mode is active.");
                 const mockLiff = {
                     isInClient: () => true,
                     isLoggedIn: () => true,
-                    getAccessToken: () => 'MOCK_ACCESS_TOKEN', // เพิ่ม getAccessToken ให้ Mock
                     getIDToken: () => 'MOCK_ID_TOKEN',
+                    getAccessToken: () => 'MOCK_ACCESS_TOKEN', // เพิ่ม getAccessToken ให้ครบถ้วน
                     closeWindow: () => {
                         console.log('Mock: LIFF window closed');
                         window.history.back();
@@ -126,24 +127,23 @@ const useLiff = (liffId) => {
                 }
 
                 if (!liff.isLoggedIn()) {
+                    // แก้ไข 2: ใช้ window.location.origin (หน้าแรก) เพื่อแก้ปัญหา Error 400
+                    // หากต้องการให้เด้งกลับหน้าเดิม ต้องไปเพิ่ม URL หน้านั้นๆ ใน LINE Console -> Login -> Callback URL
                     liff.login({ 
-                        redirectUri: window.location.href,
+                        redirectUri: window.location.origin, 
                         scope: 'profile openid chat_message.write'
                     });
                     return;
                 }
 
-                // ไม่ต้องดึง profile ที่นี่เพราะจะได้จาก API route แทน
                 // const userProfile = await liff.getProfile();
                 // setProfile(userProfile);
                 setLiffObject(liff);
 
             } catch (err) {
                 console.error("LIFF initialization failed", err);
-                
                 const detailedError = `การเชื่อมต่อ LINE ไม่สมบูรณ์: ${err.message || 'Unknown error'}`;
                 setError(detailedError);
-                
             } finally {
                 setLoading(false);
             }
