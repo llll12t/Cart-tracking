@@ -63,7 +63,7 @@ function createRow(label, value) {
 function createBubble(title, rows = [], highlightColor = '#06C755') {
   return {
     type: 'bubble',
-    size: 'giga',
+    size: 'mega', // [FIX] ลดขนาดจาก giga เป็น mega
     body: {
       type: 'box',
       layout: 'vertical',
@@ -73,7 +73,7 @@ function createBubble(title, rows = [], highlightColor = '#06C755') {
           type: 'text',
           text: title,
           weight: 'bold',
-          size: 'xl',
+          size: 'lg', // [FIX] ลดขนาด Title จาก xl เป็น lg
           color: highlightColor,
           wrap: true
         },
@@ -136,7 +136,7 @@ export function vehicleBorrowedFlex(usage) {
   ];
   return { 
     altText: 'เริ่มการใช้งานรถ', 
-    contents: createBubble('เริ่มการใช้งาน', rows, '#3b82f6') 
+    contents: createBubble('เริ่มการใช้งาน', rows, '#06C755') // [FIX] เปลี่ยนเป็นสีเขียว (LINE Green)
   };
 }
 
@@ -160,6 +160,6 @@ export function vehicleReturnedFlex(usage) {
 
   return { 
     altText: 'มีการคืนรถแล้ว', 
-    contents: createBubble('คืนรถเรียบร้อย', rows, '#6366f1') 
+    contents: createBubble('คืนรถเรียบร้อย', rows, '#06C755') // [FIX] เปลี่ยนเป็นสีเขียว (LINE Green)
   };
 }
