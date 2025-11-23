@@ -16,7 +16,6 @@ export async function GET(req) {
     // ถ้ามี CRON_SECRET และ header ไม่ตรง ให้กันออก (แต่ถ้าไม่ได้ตั้งไว้ใน .env ก็จะข้ามไป)
     if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       // อนุญาตให้ Admin กดทดสอบผ่านหน้าเว็บได้ (โดยดูว่าไม่มี auth header มาแบบ Cron)
-      // ในระบบจริงควรเช็ค Session แต่เพื่อความง่ายในการทดสอบเราจะปล่อยผ่านในกรณี Development หรือไม่มี Secret
       console.log('Running report without Cron Secret (Manual Trigger)');
     }
 
@@ -50,6 +49,7 @@ export async function GET(req) {
     expensesSnap.docs.forEach(doc => {
       const data = doc.data();
       if (data.vehicleId && data.mileage) {
+        // หาเลขไมล์ล่าสุดที่มีการเปลี่ยนของเหลว
         if (!fluidMap[data.vehicleId] || data.mileage > fluidMap[data.vehicleId]) {
           fluidMap[data.vehicleId] = data.mileage;
         }
@@ -76,13 +76,17 @@ export async function GET(req) {
           alerts.push(`⚠️ ประกัน: ${v.licensePlate} หมดอายุ ${insDate.toLocaleDateString('th-TH')}`);
         }
       }
-      // 6.3 ของเหลว (เตือนถ้าวิ่งเกิน 9,000 กม. จากครั้งล่าสุด)
-      const lastFluid = fluidMap[v.id] || 0;
+      // 6.3 ของเหลว
+      // Logic: เตือนเมื่อวิ่งครบ 9,000 กม. ขึ้นไป (เหลืออีก 1,000 กม. จะครบ 10,000 หรือเกินกำหนดแล้ว)
+      const lastFluid = fluidMap[v.id] || 0; // ถ้าไม่มีประวัติ ให้เริ่มที่ 0
       const currentKm = v.currentMileage || 0;
-      const dist = currentKm - lastFluid;
-      // เปลี่ยนเงื่อนไขเป็น 9,000 ตาม Dashboard เพื่อเตือนล่วงหน้า
+      const dist = currentKm - lastFluid; // ระยะทางที่วิ่งไปแล้วตั้งแต่เปลี่ยนครั้งล่าสุด
+
       if (dist >= 9000) { 
-        const status = dist >= 10000 ? `เกินกำหนด ${(dist - 10000).toLocaleString()} กม.` : `เหลืออีก ${(10000 - dist).toLocaleString()} กม.`;
+        const status = dist >= 10000 
+            ? `เกินกำหนด ${(dist - 10000).toLocaleString()} กม.` 
+            : `เหลืออีก ${(10000 - dist).toLocaleString()} กม.`;
+            
         alerts.push(`🛢️ ของเหลว: ${v.licensePlate} (${status})`);
       }
     });
@@ -144,7 +148,7 @@ export async function GET(req) {
         });
       });
     } else {
-        // ถ้าไม่มีแจ้งเตือนเลย ให้ใส่ข้อความว่าปกติ (optional)
+        // ถ้าไม่มีแจ้งเตือนเลย ให้ใส่ข้อความว่าปกติ
         flexContents.body.contents.push({ type: "separator", margin: "lg" });
         flexContents.body.contents.push({ type: "text", text: "✅ สภาพรถปกติดีทุกคัน", size: "xs", color: "#10b981", margin: "lg", align: "center" });
     }
@@ -155,7 +159,7 @@ export async function GET(req) {
       messages: [{ type: "flex", altText: `รายงานประจำวัน: ${new Date().toLocaleDateString('th-TH')}`, contents: flexContents }]
     };
 
-    // ใช้ fetch ของ Next.js (ไม่ต้อง import node-fetch)
+    // ใช้ fetch ของ Next.js
     const lineRes = await fetch(LINE_PUSH_ENDPOINT, {
       method: 'POST',
       headers: {
