@@ -56,12 +56,12 @@ export default function useLiffAuth() {
           return;
         }
         const { customToken, userProfile: receivedProfile } = body;
-        
+
         // เก็บ userProfile ที่ได้จาก API
         if (receivedProfile) {
           setUserProfile(receivedProfile);
         }
-        
+
         const auth = getAuth();
         await signInWithCustomToken(auth, customToken);
         if (!mounted) return;
@@ -93,12 +93,12 @@ export default function useLiffAuth() {
         throw new Error(body?.error || 'link_failed');
       }
       const { customToken, userProfile: receivedProfile } = body;
-      
+
       // เก็บ userProfile ที่ได้จาก link API
       if (receivedProfile) {
         setUserProfile(receivedProfile);
       }
-      
+
       const auth = getAuth();
       await signInWithCustomToken(auth, customToken);
       setNeedsLink(false);

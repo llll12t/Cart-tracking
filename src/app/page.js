@@ -1,10 +1,11 @@
 // src/app/page.js
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -12,6 +13,19 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { userProfile, loading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && userProfile) {
+      // Role-based redirection
+      if (userProfile.role === 'admin' || userProfile.role === 'employee') {
+        router.replace('/dashboard');
+      } else {
+        // For drivers or other roles, redirect to their main page
+        router.replace('/my-bookings');
+      }
+    }
+  }, [userProfile, authLoading, router]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -20,7 +34,7 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       // หาก Login สำเร็จ ให้ redirect ไปหน้า dashboard
-      router.push('/dashboard'); 
+      router.push('/dashboard');
     } catch (err) {
       // แสดงข้อความ error ที่อ่านง่ายสำหรับ auth/invalid-credential
       if (err.code === 'auth/invalid-credential') {

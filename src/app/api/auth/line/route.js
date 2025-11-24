@@ -11,7 +11,7 @@ import admin from '@/lib/firebaseAdmin';
 export async function POST(request) {
   try {
     console.log('[Auth API] Starting authentication request');
-    
+
     // Verify Firebase Admin is initialized
     if (!admin.apps.length) {
       console.error('[Auth API] Firebase Admin not initialized!');
@@ -20,7 +20,7 @@ export async function POST(request) {
         { status: 500 }
       );
     }
-    
+
     const { accessToken } = await request.json();
 
     if (!accessToken) {
@@ -33,16 +33,16 @@ export async function POST(request) {
     // For mock tokens, handle specially
     if (accessToken === 'MOCK_ACCESS_TOKEN') {
       console.log('[Auth API] Mock access token detected, using mock flow');
-      
+
       // Check if a test user exists or create one
       const mockLineId = 'U_TEST_1234567890ABCDEF';
       const db = admin.firestore();
-      
+
       try {
         // Try to find user by lineId
         const usersRef = db.collection('users');
         const snapshot = await usersRef.where('lineId', '==', mockLineId).limit(1).get();
-        
+
         let uid;
         if (snapshot.empty) {
           // No user found, return needsLink
@@ -61,12 +61,12 @@ export async function POST(request) {
 
         // Create custom token
         const customToken = await admin.auth().createCustomToken(uid);
-        
+
         // ดึงข้อมูล user document สำหรับส่งกลับ
         const userDoc = await db.collection('users').doc(uid).get();
         const userData = userDoc.data();
-        
-        return NextResponse.json({ 
+
+        return NextResponse.json({
           customToken,
           userProfile: {
             uid: uid,
@@ -134,7 +134,7 @@ export async function POST(request) {
     const customToken = await admin.auth().createCustomToken(uid);
 
     // ส่ง userProfile กลับมาด้วยเพื่อลดการดึงข้อมูลซ้ำ
-    return NextResponse.json({ 
+    return NextResponse.json({
       customToken,
       userProfile: {
         uid: uid,

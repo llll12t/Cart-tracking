@@ -39,17 +39,17 @@ const useLiff = (liffId) => {
                         }
                         const nestedMatch = decoded.match(/liff\.state=([^&]+)/);
                         if (nestedMatch && nestedMatch[1]) {
-                            try { decoded = decodeURIComponent(nestedMatch[1]); } catch (e) {}
+                            try { decoded = decodeURIComponent(nestedMatch[1]); } catch (e) { }
                         }
                         decoded = decoded.split('?')[0].trim();
                         let targetPath = decoded;
                         if (!targetPath.startsWith('/')) targetPath = '/' + targetPath;
-                        
+
                         const currentPath = window.location.pathname || '/';
                         // Logic การ redirect หน้า confirm
                         if (targetPath.startsWith('/confirm') && currentPath !== targetPath) {
-                             window.location.replace(targetPath);
-                             return; // หยุดการทำงานเพื่อรอ redirect
+                            window.location.replace(targetPath);
+                            return; // หยุดการทำงานเพื่อรอ redirect
                         }
                     } catch (e) {
                         console.warn('Failed to normalize liff.state', e);
@@ -57,13 +57,11 @@ const useLiff = (liffId) => {
                 }
 
                 if (!liff.isLoggedIn()) {
-                    // กรณีต้อง Login: สั่ง Login และ *ไม่ต้อง* setLoading(false)
-                    // เพราะเราต้องการให้สถานะยังคงเป็น Loading จนกว่าจะ Redirect ไปหน้าไลน์
-                    liff.login({ 
-                        redirectUri: window.location.origin, 
+                    // กรณีต้อง Login: สั่ง Login
+                    liff.login({
                         scope: 'profile openid chat_message.write'
                     });
-                    return; 
+                    return;
                 }
 
                 // กรณี Login แล้ว: เก็บค่า liff และจบการโหลด

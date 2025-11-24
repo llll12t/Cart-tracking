@@ -17,19 +17,28 @@ export const AuthProvider = ({ children, initialUserProfile = null }) => {
     setUserProfile(profile);
   }, []);
 
+  // ใช้ useRef เพื่อเก็บค่า userProfile ล่าสุด โดยไม่ต้องใส่ใน dependency ของ useEffect
+  const userProfileRef = React.useRef(userProfile);
+
+  useEffect(() => {
+    userProfileRef.current = userProfile;
+  }, [userProfile]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       console.log("onAuthStateChanged triggered. firebaseUser:", firebaseUser);
-      
+
       if (firebaseUser) {
         setUser(firebaseUser);
-        
+
         // [OPTIMIZATION] ตรวจสอบก่อนว่ามี userProfile อยู่แล้วหรือไม่ (จากการ Login ผ่าน LIFF)
-        // ถ้ามีอยู่แล้วและ uid ตรงกัน ไม่ต้องดึงใหม่จาก Firestore ให้เสียเวลา
-        if (userProfile && (userProfile.uid === firebaseUser.uid || userProfile.id === firebaseUser.uid)) {
-             console.log("Using existing user profile from LIFF/State, skipping Firestore fetch.");
-             setLoading(false);
-             return; 
+        // ใช้ current value จาก ref แทน state โดยตรง
+        const currentProfile = userProfileRef.current;
+
+        if (currentProfile && (currentProfile.uid === firebaseUser.uid || currentProfile.id === firebaseUser.uid)) {
+          console.log("Using existing user profile from LIFF/State, skipping Firestore fetch.");
+          setLoading(false);
+          return;
         }
 
         // ถ้ายังไม่มี Profile ถึงค่อยไปดึงจาก Firestore
@@ -58,7 +67,7 @@ export const AuthProvider = ({ children, initialUserProfile = null }) => {
     });
 
     return () => unsubscribe();
-  }, [userProfile]); // เพิ่ม userProfile ใน dependency เพื่อให้ check state ล่าสุดได้ถูกต้อง
+  }, []); // ลบ userProfile ออกจาก dependency เพื่อป้องกัน loop
 
   const logout = useCallback(async () => {
     try {
